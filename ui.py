@@ -44,7 +44,7 @@ class UI:
         self.settings_menu_visible = False
         self.language_menu_visible = False
         self.menu_animation_progress = {}
-        self.menu_animation_speed = 8.0
+        self.menu_animation_speed = 6.0
         self._menu_expanding = {}
         self._menu_collapsing = {}
         
@@ -160,31 +160,34 @@ class UI:
         
         button_y += button_height + 10
         
+        original_button_y = button_y
+        
         if self.settings_menu_visible:
             self._draw_settings_menu(screen, button_y, button_width, button_height)
         elif self.language_menu_visible:
             self._draw_language_menu(screen, button_y, button_width, button_height)
-        elif selected_tile and selected_tile.owner == current_player:
-            if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
-                build_button = {
-                    'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-                    'text': self.loc.t('build'),
-                    'action': 'open_build_menu',
-                    'color': (100, 100, 180)
-                }
-                self.buttons.append(build_button)
-                self._draw_button(screen, build_button)
-                button_y += button_height + 10
-            
-            if selected_tile.unit:
-                move_text = self.loc.t('moved') if selected_tile.unit.moved_this_turn else self.loc.t('can_move')
-                attack_text = self.loc.t('attacked') if selected_tile.unit.attacked_this_turn else self.loc.t('can_attack')
-                info_text = f"{self.loc.t('status')}: {move_text}, {attack_text}"
-                info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
-                screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
-        
-        if self.build_menu_visible and selected_tile:
+        elif self.build_menu_visible and selected_tile:
             self._draw_build_menu(screen, current_player, selected_tile, button_y)
+        
+        if not (self.settings_menu_visible or self.language_menu_visible or self.build_menu_visible):
+            if selected_tile and selected_tile.owner == current_player:
+                if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
+                    build_button = {
+                        'rect': pygame.Rect(self.panel_x + 10, original_button_y, button_width, button_height),
+                        'text': self.loc.t('build'),
+                        'action': 'open_build_menu',
+                        'color': (100, 100, 180)
+                    }
+                    self.buttons.append(build_button)
+                    self._draw_button(screen, build_button)
+                    original_button_y += button_height + 10
+                
+                if selected_tile.unit:
+                    move_text = self.loc.t('moved') if selected_tile.unit.moved_this_turn else self.loc.t('can_move')
+                    attack_text = self.loc.t('attacked') if selected_tile.unit.attacked_this_turn else self.loc.t('can_attack')
+                    info_text = f"{self.loc.t('status')}: {move_text}, {attack_text}"
+                    info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
+                    screen.blit(info_surface, (self.panel_x + 10, original_button_y + 5))
         
         return self.buttons
     
@@ -256,10 +259,15 @@ class UI:
         import math
         
         menu_progress = self.menu_animation_progress.get('settings', 0.0)
+        if menu_progress <= 0:
+            return
         
         menu_y = start_y
         menu_width = width
         menu_height = height
+        
+        start_x = self.panel_x + self.panel_width
+        target_x = self.panel_x + 10
         
         language_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
@@ -268,16 +276,10 @@ class UI:
             'color': (80, 100, 120)
         }
         
-        start_x = self.panel_x + self.panel_width
-        start_y_lang = menu_y
-        target_x = self.panel_x + 10
-        target_y_lang = menu_y
-        
-        lang_progress = max(0, min(1, (menu_progress - 0.0) * 2.0))
         animated_lang_button = self._draw_animated_button(
             screen, language_button,
-            start_x, start_y_lang, target_x, target_y_lang,
-            lang_progress
+            start_x, menu_y, target_x, menu_y,
+            menu_progress
         )
         self.buttons.append(animated_lang_button)
         
@@ -290,12 +292,10 @@ class UI:
             'color': (120, 80, 80)
         }
         
-        start_y_close = start_y + height + 10
-        close_progress = max(0, min(1, (menu_progress - 0.3) * 2.0))
         animated_close_button = self._draw_animated_button(
             screen, close_button,
-            start_x, start_y_close, target_x, menu_y,
-            close_progress
+            start_x, menu_y, target_x, menu_y,
+            menu_progress
         )
         self.buttons.append(animated_close_button)
     
@@ -303,6 +303,8 @@ class UI:
         import math
         
         menu_progress = self.menu_animation_progress.get('language', 0.0)
+        if menu_progress <= 0:
+            return
         
         menu_y = start_y
         menu_width = width
@@ -313,8 +315,6 @@ class UI:
         start_x = self.panel_x + self.panel_width
         target_x = self.panel_x + 10
         
-        button_delay = 0.15
-        
         en_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
             'text': self.loc.t('language_en'),
@@ -322,11 +322,10 @@ class UI:
             'color': (100, 150, 100) if self.loc.get_language() == 'en' else (80, 100, 150)
         }
         
-        en_progress = max(0, min(1, (menu_progress - 0.0) * 2.5))
         animated_en_button = self._draw_animated_button(
             screen, en_button,
             start_x, menu_y, target_x, menu_y,
-            en_progress
+            menu_progress
         )
         self.buttons.append(animated_en_button)
         
@@ -341,11 +340,10 @@ class UI:
                 'color': (100, 150, 100) if self.loc.get_language() == 'zh' else (80, 80, 80)
             }
             
-            zh_progress = max(0, min(1, (menu_progress - button_delay) * 2.5))
             animated_zh_button = self._draw_animated_button(
                 screen, zh_button,
                 start_x, menu_y, target_x, menu_y,
-                zh_progress
+                menu_progress
             )
             self.buttons.append(animated_zh_button)
         else:
@@ -357,15 +355,14 @@ class UI:
                 'color': (120, 100, 60)
             }
             
-            zh_progress = max(0, min(1, (menu_progress - button_delay) * 2.5))
             animated_zh_button = self._draw_animated_button(
                 screen, zh_button,
                 start_x, menu_y, target_x, menu_y,
-                zh_progress
+                menu_progress
             )
             self.buttons.append(animated_zh_button)
             
-            if zh_progress > 0.5:
+            if menu_progress > 0.5:
                 hint_y = menu_y + menu_height + 10
                 hint_text1 = self.font_small.render("* Put Chinese font (.ttf) in", True, (255, 200, 100))
                 hint_text2 = self.font_small.render("  'fonts/' folder in game dir", True, (255, 200, 100))
@@ -381,11 +378,10 @@ class UI:
             'color': (120, 80, 80)
         }
         
-        back_progress = max(0, min(1, (menu_progress - button_delay * 2) * 2.5))
         animated_back_button = self._draw_animated_button(
             screen, back_button,
             start_x, menu_y, target_x, menu_y,
-            back_progress
+            menu_progress
         )
         self.buttons.append(animated_back_button)
     
@@ -393,6 +389,8 @@ class UI:
         import math
         
         menu_progress = self.menu_animation_progress.get('build', 0.0)
+        if menu_progress <= 0:
+            return
         
         menu_y = start_y
         menu_height = 30
@@ -400,10 +398,9 @@ class UI:
         
         start_x = self.panel_x + self.panel_width
         target_x = self.panel_x + 15
-        button_delay = 0.1
         
-        if menu_progress > 0.1:
-            title_alpha = int(255 * min(1, (menu_progress - 0.1) * 3))
+        if menu_progress > 0:
+            title_alpha = int(255 * min(1, menu_progress * 1.5))
             title = self.font_medium.render(self.loc.t('select_building'), True, TEXT_COLOR)
             title_surface = pygame.Surface(title.get_size(), pygame.SRCALPHA)
             title_surface.blit(title, (0, 0))
@@ -411,7 +408,6 @@ class UI:
             screen.blit(title_surface, (self.panel_x + 15, menu_y))
         menu_y += 35
         
-        button_index = 0
         for building_type, info in BUILDING_INFO.items():
             cost = info['cost']
             can_afford = player.can_afford(cost)
@@ -430,17 +426,15 @@ class UI:
                 'enabled': can_afford
             }
             
-            btn_progress = max(0, min(1, (menu_progress - button_delay * button_index) * 3.0))
             animated_button = self._draw_animated_button(
                 screen, button,
                 start_x, menu_y, target_x, menu_y,
-                btn_progress,
+                menu_progress,
                 small=True
             )
             self.buttons.append(animated_button)
             
             menu_y += menu_height + 5
-            button_index += 1
         
         close_button = {
             'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
@@ -449,11 +443,10 @@ class UI:
             'color': (120, 80, 80)
         }
         
-        close_progress = max(0, min(1, (menu_progress - button_delay * button_index) * 3.0))
         animated_close_button = self._draw_animated_button(
             screen, close_button,
             start_x, menu_y, target_x, menu_y,
-            close_progress,
+            menu_progress,
             small=True
         )
         self.buttons.append(animated_close_button)
