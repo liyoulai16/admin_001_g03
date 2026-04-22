@@ -402,9 +402,21 @@ class Game:
                             self.ui.close_language_menu()
                             self.ui.close_settings_menu()
                         elif action == 'set_language_zh':
-                            self.set_language('zh')
-                            self.ui.close_language_menu()
-                            self.ui.close_settings_menu()
+                            if self.ui.get_font_manager().is_chinese_available():
+                                self.set_language('zh')
+                                self.ui.close_language_menu()
+                                self.ui.close_settings_menu()
+                            else:
+                                self.add_message("Chinese font not found. Put .ttf file in 'fonts/' folder.")
+                        elif action == 'show_font_help':
+                            font_info = self.ui.get_font_manager().get_chinese_font_info()
+                            search_paths = "\n  - ".join(font_info.get('search_paths', []))
+                            self.add_message("To use Chinese:")
+                            self.add_message("1. Create 'fonts/' folder in game directory")
+                            self.add_message("2. Put Chinese .ttf font file in it")
+                            self.add_message("3. Restart the game")
+                            if search_paths:
+                                self.add_message(f"Search paths: {search_paths}")
                         elif action.startswith('build_'):
                             building_type = action[6:]
                             self.build_structure(building_type)
