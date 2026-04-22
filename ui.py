@@ -13,30 +13,73 @@ class FontManager:
     def __init__(self):
         self.chinese_fonts_available = False
         self._check_chinese_fonts()
+        self._test_chinese_rendering()
     
     def _check_chinese_fonts(self) -> bool:
         chinese_font_names = [
             'simhei',
+            'SimHei',
             'msyh',
+            'Microsoft YaHei',
             'simsun',
+            'SimSun',
             'microsoftyahei',
             'mingliu',
-            'notosanscjksc',
+            'MingLiU',
         ]
         
         for font_name in chinese_font_names:
             try:
                 font = pygame.font.SysFont(font_name, 24)
                 if font:
-                    self.chinese_fonts_available = True
-                    return True
-            except:
+                    if self._test_font_renders_chinese(font):
+                        self.chinese_fonts_available = True
+                        self._chinese_font_name = font_name
+                        return True
+            except Exception as e:
                 continue
         
         return False
     
+    def _test_font_renders_chinese(self, font) -> bool:
+        try:
+            test_text = "中文"
+            surface = font.render(test_text, True, (255, 255, 255))
+            width, height = surface.get_size()
+            
+            if width < 10 or height < 10:
+                return False
+            
+            return True
+        except:
+            return False
+    
+    def _test_chinese_rendering(self) -> bool:
+        if not self.chinese_fonts_available:
+            try:
+                default_font = pygame.font.Font(None, 24)
+                test_text = "中文"
+                surface = default_font.render(test_text, True, (255, 255, 255))
+                width, height = surface.get_size()
+                
+                if width > 20 and height > 10:
+                    self.chinese_fonts_available = True
+                    return True
+            except:
+                pass
+        
+        return self.chinese_fonts_available
+    
     def get_font(self, size: int, language: str = 'en'):
         if language == 'zh' and self.chinese_fonts_available:
+            if hasattr(self, '_chinese_font_name'):
+                try:
+                    font = pygame.font.SysFont(self._chinese_font_name, size)
+                    if font:
+                        return font
+                except:
+                    pass
+            
             chinese_font_names = [
                 'simhei',
                 'msyh',
@@ -53,6 +96,9 @@ class FontManager:
                     continue
         
         return pygame.font.Font(None, size)
+    
+    def is_chinese_available(self) -> bool:
+        return self.chinese_fonts_available
 
 
 class UI:
@@ -74,6 +120,8 @@ class UI:
         self.settings_menu_open = False
         self.language_menu_open = False
         self.unit_menu_open = False
+        
+        self._language_warning_shown = False
     
     def _init_fonts(self):
         language = self.loc.get_language()
@@ -84,6 +132,9 @@ class UI:
     def set_localization(self, localization: Localization):
         self.loc = localization
         self._init_fonts()
+    
+    def get_font_manager(self) -> FontManager:
+        return self.font_manager
     
     def draw_resource_panel(self, screen: pygame.Surface, player: Player, turn: int):
         panel_rect = pygame.Rect(self.panel_x, 0, self.panel_width, 120)
@@ -227,6 +278,8 @@ class UI:
         menu_width = width
         menu_height = height
         
+        chinese_available = self.font_manager.is_chinese_available()
+        
         en_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
             'text': self.loc.t('language_en'),
@@ -238,16 +291,27 @@ class UI:
         
         menu_y += menu_height + 5
         
+        zh_color = (100, 150, 100) if self.loc.get_language() == 'zh' else (80, 80, 80)
+        if not chinese_available:
+            zh_color = (120, 60, 60)
+        
         zh_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
-            'text': self.loc.t('language_zh'),
-            'action': 'set_language_zh',
-            'color': (80, 100, 150) if self.loc.get_language() != 'zh' else (100, 150, 100)
+            'text': self.loc.t('language_zh') if chinese_available else "Chinese (Unavailable)",
+            'action': 'set_language_zh' if chinese_available else None,
+            'color': zh_color,
+            'enabled': chinese_available
         }
         self.buttons.append(zh_button)
         self._draw_button(screen, zh_button)
         
         menu_y += menu_height + 10
+        
+        if not chinese_available:
+            warning_y = menu_y
+            warning_text = self.font_small.render("* Needs system Chinese fonts", True, (255, 150, 100))
+            screen.blit(warning_text, (self.panel_x + 12, warning_y))
+            menu_y += 25
         
         back_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
@@ -302,9 +366,17 @@ class UI:
         pygame.draw.rect(screen, (50, 50, 50), button['rect'], 2)
         
         font = self.font_small if small else self.font_medium
-        text_surface = font.render(button['text'], True, TEXT_COLOR)
-        text_rect = text_surface.get_rect(center=button['rect'].center)
-        screen.blit(text_surface, text_rect)
+        text = button.get('text', '')
+        
+        try:
+            text_surface = font.render(text, True, TEXT_COLOR)
+            text_rect = text_surface.get_rect(center=button['rect'].center)
+            screen.blit(text_surface, text_rect)
+        except Exception as e:
+            fallback_font = pygame.font.Font(None, 16 if small else 20)
+            text_surface = fallback_font.render(text, True, TEXT_COLOR)
+            text_rect = text_surface.get_rect(center=button['rect'].center)
+            screen.blit(text_surface, text_rect)
     
     def handle_click(self, mouse_pos: Tuple[int, int], buttons: List[Dict]) -> Optional[str]:
         for button in buttons:
@@ -352,6 +424,11 @@ class UI:
         
         y_offset = log_y + 30
         for msg in display_messages:
-            text_surface = self.font_small.render(msg, True, (200, 200, 200))
-            screen.blit(text_surface, (20, y_offset))
+            try:
+                text_surface = self.font_small.render(msg, True, (200, 200, 200))
+                screen.blit(text_surface, (20, y_offset))
+            except:
+                fallback_font = pygame.font.Font(None, 16)
+                text_surface = fallback_font.render(msg, True, (200, 200, 200))
+                screen.blit(text_surface, (20, y_offset))
             y_offset += 22
