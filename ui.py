@@ -2,29 +2,88 @@ import pygame
 from typing import Dict, Optional, Tuple, List
 from config import (
     UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR, SELECTED_COLOR,
-    RESOURCE_ICONS, RESOURCE_NAMES, BUILDING_INFO, UNIT_INFO, TERRAIN_NAMES
+    BUILDING_INFO
 )
 from player import Player, Building, Unit
 from hex_map import HexMap, HexTile
+from localization import Localization
+
+
+class FontManager:
+    def __init__(self):
+        self.chinese_fonts_available = False
+        self._check_chinese_fonts()
+    
+    def _check_chinese_fonts(self) -> bool:
+        chinese_font_names = [
+            'simhei',
+            'msyh',
+            'simsun',
+            'microsoftyahei',
+            'mingliu',
+            'notosanscjksc',
+        ]
+        
+        for font_name in chinese_font_names:
+            try:
+                font = pygame.font.SysFont(font_name, 24)
+                if font:
+                    self.chinese_fonts_available = True
+                    return True
+            except:
+                continue
+        
+        return False
+    
+    def get_font(self, size: int, language: str = 'en'):
+        if language == 'zh' and self.chinese_fonts_available:
+            chinese_font_names = [
+                'simhei',
+                'msyh',
+                'simsun',
+                'microsoftyahei',
+            ]
+            
+            for font_name in chinese_font_names:
+                try:
+                    font = pygame.font.SysFont(font_name, size)
+                    if font:
+                        return font
+                except:
+                    continue
+        
+        return pygame.font.Font(None, size)
 
 
 class UI:
-    def __init__(self, screen_width: int, screen_height: int):
+    def __init__(self, screen_width: int, screen_height: int, localization: Localization):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.panel_width = 250
         self.panel_x = screen_width - self.panel_width
+        self.loc = localization
         
         if not pygame.font.get_init():
             pygame.font.init()
         
-        self.font_large = pygame.font.Font(None, 28)
-        self.font_medium = pygame.font.Font(None, 22)
-        self.font_small = pygame.font.Font(None, 18)
+        self.font_manager = FontManager()
+        self._init_fonts()
         
         self.buttons: List[Dict] = []
         self.build_menu_open = False
+        self.settings_menu_open = False
+        self.language_menu_open = False
         self.unit_menu_open = False
+    
+    def _init_fonts(self):
+        language = self.loc.get_language()
+        self.font_large = self.font_manager.get_font(28, language)
+        self.font_medium = self.font_manager.get_font(22, language)
+        self.font_small = self.font_manager.get_font(18, language)
+    
+    def set_localization(self, localization: Localization):
+        self.loc = localization
+        self._init_fonts()
     
     def draw_resource_panel(self, screen: pygame.Surface, player: Player, turn: int):
         panel_rect = pygame.Rect(self.panel_x, 0, self.panel_width, 120)
@@ -32,13 +91,13 @@ class UI:
         pygame.draw.line(screen, (100, 100, 100), 
                         (self.panel_x, 0), (self.panel_x, self.screen_height), 2)
         
-        turn_text = self.font_large.render(f"Turn: {turn}", True, TEXT_COLOR)
+        turn_text = self.font_large.render(f"{self.loc.t('turn')}: {turn}", True, TEXT_COLOR)
         screen.blit(turn_text, (self.panel_x + 10, 10))
         
         y_offset = 45
         for res_type, amount in player.resources.items():
-            icon = RESOURCE_ICONS.get(res_type, '')
-            name = RESOURCE_NAMES.get(res_type, res_type)
+            icon = self.loc.get_resource_icon(res_type)
+            name = self.loc.get_resource_name(res_type)
             text = self.font_medium.render(f"{icon} {name}: {amount}", True, TEXT_COLOR)
             screen.blit(text, (self.panel_x + 10, y_offset))
             y_offset += 25
@@ -47,31 +106,34 @@ class UI:
         panel_rect = pygame.Rect(self.panel_x, 130, self.panel_width, 180)
         pygame.draw.rect(screen, UI_PANEL_COLOR, panel_rect)
         
-        title = self.font_large.render("Tile Info", True, TEXT_COLOR)
+        title = self.font_large.render(self.loc.t('tile_info'), True, TEXT_COLOR)
         screen.blit(title, (self.panel_x + 10, 140))
         
         if tile is None:
-            no_info = self.font_medium.render("No tile selected", True, (150, 150, 150))
+            no_info = self.font_medium.render(self.loc.t('no_tile_selected'), True, (150, 150, 150))
             screen.blit(no_info, (self.panel_x + 10, 170))
             return
         
-        terrain_name = TERRAIN_NAMES.get(tile.terrain, tile.terrain)
-        terrain_text = self.font_medium.render(f"Terrain: {terrain_name}", True, TEXT_COLOR)
+        terrain_name = self.loc.get_terrain_name(tile.terrain)
+        terrain_text = self.font_medium.render(f"{self.loc.t('terrain')}: {terrain_name}", True, TEXT_COLOR)
         screen.blit(terrain_text, (self.panel_x + 10, 170))
         
-        owner_text = self.font_medium.render(f"Owner: {tile.owner.name if tile.owner else 'None'}", 
+        owner_name = tile.owner.name if tile.owner else self.loc.t('none')
+        owner_text = self.font_medium.render(f"{self.loc.t('owner')}: {owner_name}", 
                                              True, TEXT_COLOR)
         screen.blit(owner_text, (self.panel_x + 10, 195))
         
         if tile.building:
-            building_text = self.font_medium.render(f"Building: {tile.building.name}", True, TEXT_COLOR)
+            building_name = self.loc.get_building_name(tile.building.building_type)
+            building_text = self.font_medium.render(f"{self.loc.t('building')}: {building_name}", True, TEXT_COLOR)
             screen.blit(building_text, (self.panel_x + 10, 220))
             hp_text = self.font_small.render(f"HP: {tile.building.health}/{tile.building.max_health}", 
                                              True, TEXT_COLOR)
             screen.blit(hp_text, (self.panel_x + 20, 245))
         
         if tile.unit:
-            unit_text = self.font_medium.render(f"Unit: {tile.unit.name}", True, TEXT_COLOR)
+            unit_name = self.loc.get_unit_name(tile.unit.unit_type)
+            unit_text = self.font_medium.render(f"{self.loc.t('unit')}: {unit_name}", True, TEXT_COLOR)
             screen.blit(unit_text, (self.panel_x + 10, 270 if tile.building else 220))
             hp_text = self.font_small.render(f"HP: {tile.unit.health}/{tile.unit.max_health}", 
                                              True, TEXT_COLOR)
@@ -87,7 +149,7 @@ class UI:
         
         end_turn_button = {
             'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-            'text': 'End Turn',
+            'text': self.loc.t('end_turn'),
             'action': 'end_turn',
             'color': (80, 150, 100)
         }
@@ -96,11 +158,26 @@ class UI:
         
         button_y += button_height + 10
         
-        if selected_tile and selected_tile.owner == current_player:
+        settings_button = {
+            'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+            'text': self.loc.t('settings'),
+            'action': 'open_settings_menu',
+            'color': (100, 80, 150)
+        }
+        self.buttons.append(settings_button)
+        self._draw_button(screen, settings_button)
+        
+        button_y += button_height + 10
+        
+        if self.settings_menu_open:
+            self._draw_settings_menu(screen, button_y, button_width, button_height)
+        elif self.language_menu_open:
+            self._draw_language_menu(screen, button_y, button_width, button_height)
+        elif selected_tile and selected_tile.owner == current_player:
             if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
                 build_button = {
                     'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-                    'text': 'Build',
+                    'text': self.loc.t('build'),
                     'action': 'open_build_menu',
                     'color': (100, 100, 180)
                 }
@@ -109,9 +186,9 @@ class UI:
                 button_y += button_height + 10
             
             if selected_tile.unit:
-                move_text = 'Moved' if selected_tile.unit.moved_this_turn else 'Can move'
-                attack_text = 'Attacked' if selected_tile.unit.attacked_this_turn else 'Can attack'
-                info_text = f"Status: {move_text}, {attack_text}"
+                move_text = self.loc.t('moved') if selected_tile.unit.moved_this_turn else self.loc.t('can_move')
+                attack_text = self.loc.t('attacked') if selected_tile.unit.attacked_this_turn else self.loc.t('can_attack')
+                info_text = f"{self.loc.t('status')}: {move_text}, {attack_text}"
                 info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
                 screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
         
@@ -120,12 +197,73 @@ class UI:
         
         return self.buttons
     
+    def _draw_settings_menu(self, screen: pygame.Surface, start_y: int, width: int, height: int):
+        menu_y = start_y
+        menu_width = width
+        menu_height = height
+        
+        language_button = {
+            'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
+            'text': self.loc.t('language'),
+            'action': 'open_language_menu',
+            'color': (80, 100, 120)
+        }
+        self.buttons.append(language_button)
+        self._draw_button(screen, language_button)
+        
+        menu_y += menu_height + 10
+        
+        close_button = {
+            'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
+            'text': self.loc.t('cancel'),
+            'action': 'close_settings_menu',
+            'color': (120, 80, 80)
+        }
+        self.buttons.append(close_button)
+        self._draw_button(screen, close_button)
+    
+    def _draw_language_menu(self, screen: pygame.Surface, start_y: int, width: int, height: int):
+        menu_y = start_y
+        menu_width = width
+        menu_height = height
+        
+        en_button = {
+            'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
+            'text': self.loc.t('language_en'),
+            'action': 'set_language_en',
+            'color': (80, 100, 150) if self.loc.get_language() != 'en' else (100, 150, 100)
+        }
+        self.buttons.append(en_button)
+        self._draw_button(screen, en_button)
+        
+        menu_y += menu_height + 5
+        
+        zh_button = {
+            'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
+            'text': self.loc.t('language_zh'),
+            'action': 'set_language_zh',
+            'color': (80, 100, 150) if self.loc.get_language() != 'zh' else (100, 150, 100)
+        }
+        self.buttons.append(zh_button)
+        self._draw_button(screen, zh_button)
+        
+        menu_y += menu_height + 10
+        
+        back_button = {
+            'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
+            'text': self.loc.t('cancel'),
+            'action': 'close_language_menu',
+            'color': (120, 80, 80)
+        }
+        self.buttons.append(back_button)
+        self._draw_button(screen, back_button)
+    
     def _draw_build_menu(self, screen: pygame.Surface, player: Player, tile: HexTile):
         menu_y = 400
         menu_height = 30
         menu_width = self.panel_width - 30
         
-        title = self.font_medium.render("Select Building:", True, TEXT_COLOR)
+        title = self.font_medium.render(self.loc.t('select_building'), True, TEXT_COLOR)
         screen.blit(title, (self.panel_x + 15, menu_y))
         menu_y += 35
         
@@ -135,8 +273,9 @@ class UI:
             
             button_color = (80, 80, 150) if can_afford else (80, 80, 80)
             
-            cost_str = ", ".join([f"{RESOURCE_ICONS.get(k, k)}{v}" for k, v in cost.items()])
-            button_text = f"{info['name']} ({cost_str})"
+            cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
+            building_name = self.loc.get_building_name(building_type)
+            button_text = f"{building_name} ({cost_str})"
             
             button = {
                 'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
@@ -151,7 +290,7 @@ class UI:
         
         close_button = {
             'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
-            'text': 'Cancel',
+            'text': self.loc.t('cancel'),
             'action': 'close_build_menu',
             'color': (120, 80, 80)
         }
@@ -175,9 +314,27 @@ class UI:
     
     def open_build_menu(self):
         self.build_menu_open = True
+        self.settings_menu_open = False
+        self.language_menu_open = False
     
     def close_build_menu(self):
         self.build_menu_open = False
+    
+    def open_settings_menu(self):
+        self.settings_menu_open = True
+        self.build_menu_open = False
+        self.language_menu_open = False
+    
+    def close_settings_menu(self):
+        self.settings_menu_open = False
+    
+    def open_language_menu(self):
+        self.language_menu_open = True
+        self.settings_menu_open = False
+        self.build_menu_open = False
+    
+    def close_language_menu(self):
+        self.language_menu_open = False
     
     def draw_combat_log(self, screen: pygame.Surface, messages: List[str], max_messages: int = 5):
         log_y = self.screen_height - 150
@@ -187,7 +344,7 @@ class UI:
         pygame.draw.rect(screen, (30, 35, 45), panel_rect)
         pygame.draw.rect(screen, (80, 80, 80), panel_rect, 1)
         
-        title = self.font_medium.render("Combat Log", True, TEXT_COLOR)
+        title = self.font_medium.render(self.loc.t('combat_log'), True, TEXT_COLOR)
         screen.blit(title, (20, log_y + 5))
         
         start_idx = max(0, len(messages) - max_messages)
