@@ -107,18 +107,20 @@ RESOURCE_NAMES = {
 }
 
 ANIMATION_DURATION = {
-    'unit_move': 0.3,
-    'unit_attack': 0.4,
-    'tile_select': 0.2,
-    'button_click': 0.15,
-    'menu_transition': 0.3,
+    'unit_move': 0.6,
+    'unit_attack': 0.5,
+    'tile_select': 0.3,
+    'button_click': 0.2,
+    'menu_transition': 0.4,
 }
 
 BUTTON_ANIMATION = {
     'hover_scale': 1.05,
-    'click_scale': 0.95,
+    'click_scale': 0.90,
     'hover_color_shift': 20,
-    'click_color_shift': 30,
+    'click_color_shift': 40,
+    'click_release_speed': 4.0,
+    'menu_expand_duration': 0.3,
 }
 
 UI_COLORS = {
@@ -135,6 +137,7 @@ UI_COLORS = {
 GAME_STATES = {
     'MENU': 'menu',
     'HELP': 'help',
+    'SETTINGS': 'settings',
     'PLAYING': 'playing',
     'PAUSED': 'paused',
     'GAME_OVER': 'game_over',

@@ -383,6 +383,9 @@ class Game:
         if self.game_state == GAME_STATES['MENU']:
             self.main_menu.update()
             self.main_menu.draw()
+        elif self.game_state == GAME_STATES['SETTINGS']:
+            self.settings_menu.update()
+            self.settings_menu.draw()
         elif self.game_state == GAME_STATES['PLAYING'] or self.game_state == GAME_STATES['PAUSED']:
             self._draw_game()
         elif self.game_state == GAME_STATES['HELP']:
@@ -396,6 +399,8 @@ class Game:
         
         if self.animation_manager:
             self.animation_manager.update_all()
+            dt = self.animation_manager.get_dt()
+            self.ui.update_menu_animations(dt)
         
         if self.hex_map:
             for (q, r), tile in self.hex_map.tiles.items():
@@ -490,6 +495,8 @@ class Game:
                 
                 if self.game_state == GAME_STATES['MENU']:
                     self.main_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
+                elif self.game_state == GAME_STATES['SETTINGS']:
+                    self.settings_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
                 elif self.game_state == GAME_STATES['HELP']:
                     self.help_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
             
@@ -546,9 +553,17 @@ class Game:
                             elif action.startswith('build_'):
                                 building_type = action[6:]
                                 self.build_structure(building_type)
+                            elif action == 'return_to_menu':
+                                self.game_state = GAME_STATES['MENU']
                         else:
                             q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
                             self.handle_tile_click(q, r)
+                    
+                    elif self.game_state == GAME_STATES['SETTINGS']:
+                        self.settings_menu.set_mouse_state(event.pos, True)
+                        action = self.settings_menu.handle_click()
+                        if action:
+                            self._handle_menu_action(action)
                     
                     elif self.game_state == GAME_STATES['HELP']:
                         self.help_menu.set_mouse_state(event.pos, True)
@@ -561,6 +576,8 @@ class Game:
                 
                 if self.game_state == GAME_STATES['MENU']:
                     self.main_menu.set_mouse_state(self.mouse_pos, False)
+                elif self.game_state == GAME_STATES['SETTINGS']:
+                    self.settings_menu.set_mouse_state(self.mouse_pos, False)
                 elif self.game_state == GAME_STATES['HELP']:
                     self.help_menu.set_mouse_state(self.mouse_pos, False)
             
@@ -592,7 +609,8 @@ class Game:
             self.game_state = GAME_STATES['HELP']
         
         elif action == 'show_settings':
-            pass
+            self.previous_state = self.game_state
+            self.game_state = GAME_STATES['SETTINGS']
         
         elif action == 'quit_game':
             self.running = False
