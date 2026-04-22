@@ -38,6 +38,11 @@ class UI:
         self.button_states: Dict[str, Dict] = {}
         self.mouse_pos = (0, 0)
         self.mouse_down = False
+        
+        self.build_menu_progress = 0.0
+        self.settings_menu_progress = 0.0
+        self.language_menu_progress = 0.0
+        self.menu_animation_speed = 6.0
     
     def _init_fonts(self):
         language = self.loc.get_language()
@@ -136,6 +141,17 @@ class UI:
         
         button_y += button_height + 10
         
+        return_to_menu_button = {
+            'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+            'text': self.loc.t('back_to_menu'),
+            'action': 'return_to_menu',
+            'color': (150, 100, 100)
+        }
+        self.buttons.append(return_to_menu_button)
+        self._draw_button(screen, return_to_menu_button)
+        
+        button_y += button_height + 10
+        
         if self.settings_menu_open:
             self._draw_settings_menu(screen, button_y, button_width, button_height)
         elif self.language_menu_open:
@@ -165,9 +181,19 @@ class UI:
         return self.buttons
     
     def _draw_settings_menu(self, screen: pygame.Surface, start_y: int, width: int, height: int):
+        import math
+        
+        progress = self.settings_menu_progress
+        if progress <= 0:
+            return
+        
         menu_y = start_y
         menu_width = width
         menu_height = height
+        
+        button_count = 2
+        buttons_to_show = int(math.ceil(progress * button_count))
+        fade_progress = (progress * button_count) - int(progress * button_count - 0.001)
         
         language_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
@@ -175,8 +201,9 @@ class UI:
             'action': 'open_language_menu',
             'color': (80, 100, 120)
         }
-        self.buttons.append(language_button)
-        self._draw_button(screen, language_button)
+        if buttons_to_show >= 1:
+            self.buttons.append(language_button)
+            self._draw_button(screen, language_button)
         
         menu_y += menu_height + 10
         
@@ -186,15 +213,27 @@ class UI:
             'action': 'close_settings_menu',
             'color': (120, 80, 80)
         }
-        self.buttons.append(close_button)
-        self._draw_button(screen, close_button)
+        if buttons_to_show >= 2:
+            self.buttons.append(close_button)
+            self._draw_button(screen, close_button)
     
     def _draw_language_menu(self, screen: pygame.Surface, start_y: int, width: int, height: int):
+        import math
+        
+        progress = self.language_menu_progress
+        if progress <= 0:
+            return
+        
         menu_y = start_y
         menu_width = width
         menu_height = height
         
         chinese_available = self.font_manager.is_chinese_available()
+        
+        button_index = 0
+        total_buttons = 4 if chinese_available else 5
+        
+        buttons_to_show = int(math.ceil(progress * total_buttons))
         
         en_button = {
             'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
@@ -202,8 +241,10 @@ class UI:
             'action': 'set_language_en',
             'color': (100, 150, 100) if self.loc.get_language() == 'en' else (80, 100, 150)
         }
-        self.buttons.append(en_button)
-        self._draw_button(screen, en_button)
+        button_index += 1
+        if buttons_to_show >= button_index:
+            self.buttons.append(en_button)
+            self._draw_button(screen, en_button)
         
         menu_y += menu_height + 5
         
@@ -215,8 +256,10 @@ class UI:
                 'enabled': True,
                 'color': (100, 150, 100) if self.loc.get_language() == 'zh' else (80, 80, 80)
             }
-            self.buttons.append(zh_button)
-            self._draw_button(screen, zh_button)
+            button_index += 1
+            if buttons_to_show >= button_index:
+                self.buttons.append(zh_button)
+                self._draw_button(screen, zh_button)
         else:
             zh_button = {
                 'rect': pygame.Rect(self.panel_x + 10, menu_y, menu_width, menu_height),
@@ -225,17 +268,19 @@ class UI:
                 'enabled': True,
                 'color': (120, 100, 60)
             }
-            self.buttons.append(zh_button)
-            self._draw_button(screen, zh_button)
-            
-            menu_y += menu_height + 10
-            
-            hint_y = menu_y
-            hint_text1 = self.font_small.render("* Put Chinese font (.ttf) in", True, (255, 200, 100))
-            hint_text2 = self.font_small.render("  'fonts/' folder in game dir", True, (255, 200, 100))
-            screen.blit(hint_text1, (self.panel_x + 12, hint_y))
-            screen.blit(hint_text2, (self.panel_x + 12, hint_y + 18))
-            menu_y += 36
+            button_index += 1
+            if buttons_to_show >= button_index:
+                self.buttons.append(zh_button)
+                self._draw_button(screen, zh_button)
+                
+                menu_y += menu_height + 10
+                
+                hint_y = menu_y
+                hint_text1 = self.font_small.render("* Put Chinese font (.ttf) in", True, (255, 200, 100))
+                hint_text2 = self.font_small.render("  'fonts/' folder in game dir", True, (255, 200, 100))
+                screen.blit(hint_text1, (self.panel_x + 12, hint_y))
+                screen.blit(hint_text2, (self.panel_x + 12, hint_y + 18))
+                menu_y += 36
         
         menu_y += menu_height + 10
         
@@ -245,47 +290,66 @@ class UI:
             'action': 'close_language_menu',
             'color': (120, 80, 80)
         }
-        self.buttons.append(back_button)
-        self._draw_button(screen, back_button)
+        button_index += 1
+        if buttons_to_show >= button_index:
+            self.buttons.append(back_button)
+            self._draw_button(screen, back_button)
     
     def _draw_build_menu(self, screen: pygame.Surface, player: Player, tile: HexTile):
+        import math
+        
+        progress = self.build_menu_progress
+        if progress <= 0:
+            return
+        
         menu_y = 400
         menu_height = 30
         menu_width = self.panel_width - 30
         
-        title = self.font_medium.render(self.loc.t('select_building'), True, TEXT_COLOR)
-        screen.blit(title, (self.panel_x + 15, menu_y))
+        if progress >= 0.15:
+            title = self.font_medium.render(self.loc.t('select_building'), True, TEXT_COLOR)
+            screen.blit(title, (self.panel_x + 15, menu_y))
         menu_y += 35
         
+        button_index = 0
+        total_buttons = len(BUILDING_INFO) + 2
+        buttons_to_show = int(math.ceil(progress * total_buttons))
+        
         for building_type, info in BUILDING_INFO.items():
-            cost = info['cost']
-            can_afford = player.can_afford(cost)
+            button_index += 1
             
-            button_color = (80, 80, 150) if can_afford else (80, 80, 80)
+            if buttons_to_show >= button_index:
+                cost = info['cost']
+                can_afford = player.can_afford(cost)
+                
+                button_color = (80, 80, 150) if can_afford else (80, 80, 80)
+                
+                cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
+                building_name = self.loc.get_building_name(building_type)
+                button_text = f"{building_name} ({cost_str})"
+                
+                button = {
+                    'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
+                    'text': button_text,
+                    'action': f'build_{building_type}',
+                    'color': button_color,
+                    'enabled': can_afford
+                }
+                self.buttons.append(button)
+                self._draw_button(screen, button, small=True)
             
-            cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
-            building_name = self.loc.get_building_name(building_type)
-            button_text = f"{building_name} ({cost_str})"
-            
-            button = {
-                'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
-                'text': button_text,
-                'action': f'build_{building_type}',
-                'color': button_color,
-                'enabled': can_afford
-            }
-            self.buttons.append(button)
-            self._draw_button(screen, button, small=True)
             menu_y += menu_height + 5
         
+        button_index += 1
         close_button = {
             'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
             'text': self.loc.t('cancel'),
             'action': 'close_build_menu',
             'color': (120, 80, 80)
         }
-        self.buttons.append(close_button)
-        self._draw_button(screen, close_button, small=True)
+        if buttons_to_show >= button_index:
+            self.buttons.append(close_button)
+            self._draw_button(screen, close_button, small=True)
     
     def set_mouse_state(self, mouse_pos: Tuple[int, int], mouse_down: bool):
         self.mouse_pos = mouse_pos
@@ -376,25 +440,41 @@ class UI:
         self.build_menu_open = True
         self.settings_menu_open = False
         self.language_menu_open = False
+        self.build_menu_progress = 0.0
     
     def close_build_menu(self):
         self.build_menu_open = False
+        self.build_menu_progress = 0.0
     
     def open_settings_menu(self):
         self.settings_menu_open = True
         self.build_menu_open = False
         self.language_menu_open = False
+        self.settings_menu_progress = 0.0
     
     def close_settings_menu(self):
         self.settings_menu_open = False
+        self.settings_menu_progress = 0.0
     
     def open_language_menu(self):
         self.language_menu_open = True
         self.settings_menu_open = False
         self.build_menu_open = False
+        self.language_menu_progress = 0.0
     
     def close_language_menu(self):
         self.language_menu_open = False
+        self.language_menu_progress = 0.0
+    
+    def update_menu_animations(self, dt: float):
+        if self.build_menu_open and self.build_menu_progress < 1.0:
+            self.build_menu_progress = min(self.build_menu_progress + dt * self.menu_animation_speed, 1.0)
+        
+        if self.settings_menu_open and self.settings_menu_progress < 1.0:
+            self.settings_menu_progress = min(self.settings_menu_progress + dt * self.menu_animation_speed, 1.0)
+        
+        if self.language_menu_open and self.language_menu_progress < 1.0:
+            self.language_menu_progress = min(self.language_menu_progress + dt * self.menu_animation_speed, 1.0)
     
     def draw_combat_log(self, screen: pygame.Surface, messages: List[str], max_messages: int = 5):
         log_y = self.screen_height - 150

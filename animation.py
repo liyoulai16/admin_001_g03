@@ -160,10 +160,11 @@ class ButtonAnimation:
             if self.is_clicked:
                 self.is_clicked = False
         
+        click_speed = BUTTON_ANIMATION.get('click_release_speed', 4.0)
         if self.is_clicked:
-            self.click_progress = min(self.click_progress + dt * 10, 1.0)
+            self.click_progress = min(self.click_progress + dt * 12, 1.0)
         else:
-            self.click_progress = max(self.click_progress - dt * 10, 0.0)
+            self.click_progress = max(self.click_progress - dt * click_speed, 0.0)
         
         hover_scale = BUTTON_ANIMATION['hover_scale']
         click_scale = BUTTON_ANIMATION['click_scale']
