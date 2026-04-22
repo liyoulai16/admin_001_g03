@@ -3,26 +3,29 @@ import sys
 from typing import Dict, Tuple, Optional, List
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS, BACKGROUND_COLOR, 
-    HEX_SIZE, MAP_ROWS, MAP_COLS, TERRAIN_NAMES,
-    BUILDING_INFO, UNIT_INFO, SELECTED_COLOR
+    HEX_SIZE, MAP_ROWS, MAP_COLS,
+    BUILDING_INFO, SELECTED_COLOR
 )
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
 from player import Player, Building, Unit
 from ai import SimpleAI
 from ui import UI
+from localization import Localization
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, default_language: str = 'en'):
         pygame.init()
         pygame.font.init()
         
+        self.loc = Localization(default_language)
+        
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Turn-based Strategy - Hex Map")
+        pygame.display.set_caption(self.loc.t('game_title'))
         self.clock = pygame.time.Clock()
         
-        self.ui = UI(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.ui = UI(SCREEN_WIDTH, SCREEN_HEIGHT, self.loc)
         
         self.hex_map: Optional[HexMap] = None
         self.players: List[Player] = []
@@ -37,7 +40,24 @@ class Game:
         
         self.game_messages: List[str] = []
         self.running = True
+    
+    def set_language(self, language: str):
+        self.loc.set_language(language)
+        self.ui.set_localization(self.loc)
+        pygame.display.set_caption(self.loc.t('game_title'))
         
+        for i, player in enumerate(self.players):
+            if player.is_ai:
+                player.name = f"{self.loc.t('ai')} {player.player_id}"
+            else:
+                player.name = f"{self.loc.t('player')} {player.player_id}"
+    
+    def _get_msg(self, key: str, *args) -> str:
+        template = self.loc.t(key)
+        if args:
+            return template.format(*args)
+        return template
+    
     def new_game(self):
         self.hex_map = HexMap(MAP_ROWS, MAP_COLS)
         terrain_gen = TerrainGenerator(seed=42)
@@ -45,6 +65,9 @@ class Game:
         
         player1 = Player(player_id=1, is_ai=False)
         player2 = Player(player_id=2, is_ai=True)
+        
+        player1.name = f"{self.loc.t('player')} 1"
+        player2.name = f"{self.loc.t('ai')} 2"
         
         self.players = [player1, player2]
         self.ais = {2: SimpleAI(player2)}
@@ -70,8 +93,10 @@ class Game:
         self.turn = 1
         self.selected_tile = None
         self.selected_unit = None
-        self.game_messages = ["Game started! You are Player 1 (Blue)"]
+        self.game_messages = [self._get_msg('msg_game_start')]
         self.ui.close_build_menu()
+        self.ui.close_settings_menu()
+        self.ui.close_language_menu()
     
     def get_current_player(self) -> Player:
         return self.players[self.current_player_idx]
@@ -141,42 +166,46 @@ class Game:
             target_tile.owner = unit.owner
             unit.owner.tiles_owned += 1
             
+            unit_name = self.loc.get_unit_name(unit.unit_type)
             if old_owner:
-                msg = f"{unit.name} captured enemy tile!"
+                msg = f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}"
             else:
-                msg = f"{unit.name} captured neutral tile"
+                msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
             self.add_message(msg)
         
         self.select_tile(target_tile)
     
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
+        unit_name = self.loc.get_unit_name(unit.unit_type)
         
         if target_tile.unit and target_tile.unit.owner != unit.owner:
             target = target_tile.unit
+            target_name = self.loc.get_unit_name(target.unit_type)
             damage = max(1, unit.attack - target.defense // 2)
             target.health -= damage
             
-            msg = f"{unit.name} attacked {target.name}, {damage} damage"
+            msg = f"{unit_name} {self._get_msg('msg_attacked')} {target_name}, {damage} {self._get_msg('msg_damage')}"
             
             if target.health <= 0:
                 target.owner.remove_unit(target)
                 target_tile.unit = None
-                msg += f", {target.name} destroyed!"
+                msg += f", {target_name} {self._get_msg('msg_destroyed')}"
             
             self.add_message(msg)
         
         elif target_tile.building and target_tile.building.owner != unit.owner:
             target = target_tile.building
+            target_name = self.loc.get_building_name(target.building_type)
             damage = max(1, unit.attack - 5)
             target.health -= damage
             
-            msg = f"{unit.name} attacked {target.name}, {damage} damage"
+            msg = f"{unit_name} {self._get_msg('msg_attacked')} {target_name}, {damage} {self._get_msg('msg_damage')}"
             
             if target.health <= 0:
                 target.owner.remove_building(target)
                 target_tile.building = None
-                msg += f", {target.name} destroyed!"
+                msg += f", {target_name} {self._get_msg('msg_destroyed')}"
             
             self.add_message(msg)
         
@@ -187,7 +216,7 @@ class Game:
                 
                 target_tile.owner = unit.owner
                 unit.owner.tiles_owned += 1
-                self.add_message(f"{unit.name} captured enemy tile!")
+                self.add_message(f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}")
         
         self.select_tile(target_tile)
     
@@ -197,11 +226,11 @@ class Game:
         
         player = self.get_current_player()
         if self.selected_tile.owner != player:
-            self.add_message("Can only build on your own tiles!")
+            self.add_message(self._get_msg('msg_can_only_build_own'))
             return
         
         if self.selected_tile.building:
-            self.add_message("Tile already has a building!")
+            self.add_message(self._get_msg('msg_tile_has_building'))
             return
         
         if building_type not in BUILDING_INFO:
@@ -209,7 +238,7 @@ class Game:
         
         cost = BUILDING_INFO[building_type]['cost']
         if not player.can_afford(cost):
-            self.add_message("Not enough resources!")
+            self.add_message(self._get_msg('msg_not_enough_resources'))
             return
         
         if player.spend_resources(cost):
@@ -217,8 +246,8 @@ class Game:
             self.selected_tile.building = building
             player.add_building(building)
             
-            name = BUILDING_INFO[building_type]['name']
-            self.add_message(f"Built {name}")
+            name = self.loc.get_building_name(building_type)
+            self.add_message(f"{self._get_msg('msg_built')} {name}")
             self.ui.close_build_menu()
     
     def end_turn(self):
@@ -236,7 +265,7 @@ class Game:
         self.ui.close_build_menu()
         
         if next_player.is_ai and next_player.player_id in self.ais:
-            self.add_message(f"--- AI {next_player.player_id} Turn ---")
+            self.add_message(f"--- {self.loc.t('ai')} {next_player.player_id} {self._get_msg('msg_ai_turn')} ---")
             ai = self.ais[next_player.player_id]
             result = ai.take_turn(self.hex_map)
             
@@ -252,7 +281,7 @@ class Game:
             
             income_str = ", ".join([f"{k}+{v}" for k, v in income.items() if v > 0])
             if income_str:
-                self.add_message(f"New turn! Gained: {income_str}")
+                self.add_message(f"{self._get_msg('msg_new_turn_gained')} {income_str}")
         else:
             if self.current_player_idx == 0:
                 self.turn += 1
@@ -262,7 +291,7 @@ class Game:
             
             income_str = ", ".join([f"{k}+{v}" for k, v in income.items() if v > 0])
             if income_str:
-                self.add_message(f"New turn! Gained: {income_str}")
+                self.add_message(f"{self._get_msg('msg_new_turn_gained')} {income_str}")
         
         self.check_game_end()
     
@@ -270,7 +299,7 @@ class Game:
         for player in self.players:
             if player.tiles_owned <= 0 and len(player.units) <= 0:
                 winner = [p for p in self.players if p != player][0]
-                self.add_message(f"Game over! {winner.name} wins!")
+                self.add_message(f"{self._get_msg('msg_game_over')} {winner.name} {self._get_msg('msg_wins')}")
                 self.running = False
                 return
     
@@ -305,7 +334,7 @@ class Game:
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
         turn_indicator = self.ui.font_large.render(
-            f"Current: {self.get_current_player().name}", 
+            f"{self.loc.t('current_player')}: {self.get_current_player().name}", 
             True, self.get_current_player().color
         )
         self.screen.blit(turn_indicator, (10, 10))
@@ -360,6 +389,22 @@ class Game:
                             self.ui.open_build_menu()
                         elif action == 'close_build_menu':
                             self.ui.close_build_menu()
+                        elif action == 'open_settings_menu':
+                            self.ui.open_settings_menu()
+                        elif action == 'close_settings_menu':
+                            self.ui.close_settings_menu()
+                        elif action == 'open_language_menu':
+                            self.ui.open_language_menu()
+                        elif action == 'close_language_menu':
+                            self.ui.close_language_menu()
+                        elif action == 'set_language_en':
+                            self.set_language('en')
+                            self.ui.close_language_menu()
+                            self.ui.close_settings_menu()
+                        elif action == 'set_language_zh':
+                            self.set_language('zh')
+                            self.ui.close_language_menu()
+                            self.ui.close_settings_menu()
                         elif action.startswith('build_'):
                             building_type = action[6:]
                             self.build_structure(building_type)
@@ -393,7 +438,7 @@ class Game:
 
 
 def main():
-    game = Game()
+    game = Game(default_language='en')
     game.run()
 
 
