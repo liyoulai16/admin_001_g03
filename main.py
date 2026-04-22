@@ -555,6 +555,9 @@ class Game:
                                 self.build_structure(building_type)
                             elif action == 'return_to_menu':
                                 self.game_state = GAME_STATES['MENU']
+                                self.ui.close_build_menu()
+                                self.ui.close_settings_menu()
+                                self.ui.close_language_menu()
                         else:
                             q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
                             self.handle_tile_click(q, r)
