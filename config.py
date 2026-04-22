@@ -105,3 +105,37 @@ RESOURCE_NAMES = {
     'wood': 'Wood',
     'food': 'Food',
 }
+
+ANIMATION_DURATION = {
+    'unit_move': 0.3,
+    'unit_attack': 0.4,
+    'tile_select': 0.2,
+    'button_click': 0.15,
+    'menu_transition': 0.3,
+}
+
+BUTTON_ANIMATION = {
+    'hover_scale': 1.05,
+    'click_scale': 0.95,
+    'hover_color_shift': 20,
+    'click_color_shift': 30,
+}
+
+UI_COLORS = {
+    'menu_background': (30, 40, 50),
+    'menu_title': (220, 200, 100),
+    'menu_text': (200, 200, 200),
+    'menu_button_normal': (80, 100, 120),
+    'menu_button_hover': (100, 120, 140),
+    'menu_button_click': (60, 80, 100),
+    'help_text': (180, 180, 180),
+    'highlight_border': (100, 200, 255),
+}
+
+GAME_STATES = {
+    'MENU': 'menu',
+    'HELP': 'help',
+    'PLAYING': 'playing',
+    'PAUSED': 'paused',
+    'GAME_OVER': 'game_over',
+}
