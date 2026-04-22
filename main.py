@@ -4,7 +4,7 @@ from typing import Dict, Tuple, Optional, List
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS, BACKGROUND_COLOR, 
     HEX_SIZE, MAP_ROWS, MAP_COLS,
-    BUILDING_INFO, SELECTED_COLOR
+    BUILDING_INFO, SELECTED_COLOR, GAME_STATES, UI_COLORS
 )
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
@@ -12,6 +12,9 @@ from player import Player, Building, Unit
 from ai import SimpleAI
 from ui import UI
 from localization import Localization
+from animation import AnimationManager
+from menu import MainMenu, SettingsMenu
+from help_menu import HelpMenu
 
 
 class Game:
@@ -25,7 +28,16 @@ class Game:
         pygame.display.set_caption(self.loc.t('game_title'))
         self.clock = pygame.time.Clock()
         
-        self.ui = UI(SCREEN_WIDTH, SCREEN_HEIGHT, self.loc)
+        self.animation_manager = AnimationManager()
+        
+        self.ui = UI(SCREEN_WIDTH, SCREEN_HEIGHT, self.loc, self.animation_manager)
+        
+        self.main_menu = MainMenu(self.screen, self.loc, self.animation_manager)
+        self.settings_menu = SettingsMenu(self.screen, self.loc, self.animation_manager)
+        self.help_menu = HelpMenu(self.screen, self.loc)
+        
+        self.game_state = GAME_STATES['MENU']
+        self.previous_state = None
         
         self.hex_map: Optional[HexMap] = None
         self.players: List[Player] = []
@@ -40,11 +52,19 @@ class Game:
         
         self.game_messages: List[str] = []
         self.running = True
+        
+        self.mouse_pos = (0, 0)
+        self.mouse_down = False
+        self.mouse_buttons_pressed = {1: False, 2: False, 3: False}
     
     def set_language(self, language: str):
         self.loc.set_language(language)
         self.ui.set_localization(self.loc)
         pygame.display.set_caption(self.loc.t('game_title'))
+        
+        self.main_menu = MainMenu(self.screen, self.loc, self.animation_manager)
+        self.settings_menu = SettingsMenu(self.screen, self.loc, self.animation_manager)
+        self.help_menu = HelpMenu(self.screen, self.loc)
         
         for i, player in enumerate(self.players):
             if player.is_ai:
@@ -111,6 +131,9 @@ class Game:
         if not tile:
             return
         
+        if self.animation_manager:
+            self.animation_manager.add_tile_selection((q, r))
+        
         if self.selected_unit and self.selected_unit.can_move_to(self.hex_map, q, r):
             self.move_unit(self.selected_unit, tile)
             return
@@ -152,6 +175,18 @@ class Game:
         if not source_tile:
             return
         
+        if self.animation_manager:
+            start_x, start_y = self.hex_map.hex_to_pixel(unit.tile_q, unit.tile_r)
+            end_x, end_y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+            start_screen_x = start_x + self.map_offset_x
+            start_screen_y = start_y + self.map_offset_y
+            end_screen_x = end_x + self.map_offset_x
+            end_screen_y = end_y + self.map_offset_y
+            
+            unit_id = id(unit)
+            self.animation_manager.add_unit_move(unit_id, (start_screen_x, start_screen_y), 
+                                                    (end_screen_x, end_screen_y))
+        
         source_tile.unit = None
         unit.tile_q = target_tile.q
         unit.tile_r = target_tile.r
@@ -172,12 +207,32 @@ class Game:
             else:
                 msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
             self.add_message(msg)
+            
+            if self.animation_manager:
+                x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+                screen_x = x + self.map_offset_x
+                screen_y = y + self.map_offset_y
+                self.animation_manager.particle_system.emit(
+                    screen_x, screen_y, unit.owner.color, count=20, spread=100
+                )
         
         self.select_tile(target_tile)
     
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
         unit_name = self.loc.get_unit_name(unit.unit_type)
+        
+        if self.animation_manager:
+            start_x, start_y = self.hex_map.hex_to_pixel(unit.tile_q, unit.tile_r)
+            target_x, target_y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+            start_screen_x = start_x + self.map_offset_x
+            start_screen_y = start_y + self.map_offset_y
+            target_screen_x = target_x + self.map_offset_x
+            target_screen_y = target_y + self.map_offset_y
+            
+            unit_id = id(unit)
+            self.animation_manager.add_unit_attack(unit_id, (start_screen_x, start_screen_y),
+                                                      (target_screen_x, target_screen_y))
         
         if target_tile.unit and target_tile.unit.owner != unit.owner:
             target = target_tile.unit
@@ -191,6 +246,14 @@ class Game:
                 target.owner.remove_unit(target)
                 target_tile.unit = None
                 msg += f", {target_name} {self._get_msg('msg_destroyed')}"
+                
+                if self.animation_manager:
+                    x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+                    screen_x = x + self.map_offset_x
+                    screen_y = y + self.map_offset_y
+                    self.animation_manager.particle_system.emit(
+                        screen_x, screen_y, (255, 100, 100), count=30, spread=120
+                    )
             
             self.add_message(msg)
         
@@ -249,6 +312,14 @@ class Game:
             name = self.loc.get_building_name(building_type)
             self.add_message(f"{self._get_msg('msg_built')} {name}")
             self.ui.close_build_menu()
+            
+            if self.animation_manager:
+                x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
+                screen_x = x + self.map_offset_x
+                screen_y = y + self.map_offset_y
+                self.animation_manager.particle_system.emit(
+                    screen_x, screen_y, player.color, count=25, spread=100
+                )
     
     def end_turn(self):
         current_player = self.get_current_player()
@@ -309,7 +380,22 @@ class Game:
             self.game_messages = self.game_messages[-50:]
     
     def draw(self):
+        if self.game_state == GAME_STATES['MENU']:
+            self.main_menu.update()
+            self.main_menu.draw()
+        elif self.game_state == GAME_STATES['PLAYING'] or self.game_state == GAME_STATES['PAUSED']:
+            self._draw_game()
+        elif self.game_state == GAME_STATES['HELP']:
+            self.help_menu.update()
+            self.help_menu.draw()
+        
+        pygame.display.flip()
+    
+    def _draw_game(self):
         self.screen.fill(BACKGROUND_COLOR)
+        
+        if self.animation_manager:
+            self.animation_manager.update_all()
         
         if self.hex_map:
             for (q, r), tile in self.hex_map.tiles.items():
@@ -319,6 +405,21 @@ class Game:
                 
                 corners = self.hex_map.get_hex_corners(screen_x, screen_y)
                 
+                tile_scale = 1.0
+                if self.animation_manager and (q, r) in self.animation_manager.tile_animations:
+                    tile_scale = self.animation_manager.tile_animations[(q, r)].scale
+                
+                if tile_scale != 1.0:
+                    scaled_corners = []
+                    for cx, cy in corners:
+                        dx = cx - screen_x
+                        dy = cy - screen_y
+                        scaled_corners.append((
+                            screen_x + dx * tile_scale,
+                            screen_y + dy * tile_scale
+                        ))
+                    corners = scaled_corners
+                
                 pygame.draw.polygon(self.screen, tile.get_color(), corners)
                 pygame.draw.polygon(self.screen, tile.get_border_color(), corners, 2)
                 
@@ -326,7 +427,17 @@ class Game:
                     self.draw_building_icon(screen_x, screen_y, tile.building)
                 
                 if tile.unit:
-                    self.draw_unit_icon(screen_x, screen_y, tile.unit)
+                    unit_id = id(tile.unit)
+                    if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
+                        anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
+                        self.draw_unit_icon(anim_pos[0], anim_pos[1], tile.unit)
+                    else:
+                        self.draw_unit_icon(screen_x, screen_y, tile.unit)
+        
+        if self.animation_manager:
+            self.animation_manager.particle_system.draw(self.screen)
+        
+        self.ui.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
         
         self.ui.draw_resource_panel(self.screen, self.get_current_player(), self.turn)
         self.ui.draw_tile_info(self.screen, self.selected_tile)
@@ -338,8 +449,6 @@ class Game:
             True, self.get_current_player().color
         )
         self.screen.blit(turn_indicator, (10, 10))
-        
-        pygame.display.flip()
     
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
@@ -376,70 +485,136 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             
+            elif event.type == pygame.MOUSEMOTION:
+                self.mouse_pos = event.pos
+                
+                if self.game_state == GAME_STATES['MENU']:
+                    self.main_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
+                elif self.game_state == GAME_STATES['HELP']:
+                    self.help_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
+            
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                self.mouse_buttons_pressed[event.button] = True
+                
                 if event.button == 1:
-                    mouse_pos = pygame.mouse.get_pos()
+                    self.mouse_pos = event.pos
                     
-                    action = self.ui.handle_click(mouse_pos, self.ui.buttons)
+                    if self.game_state == GAME_STATES['MENU']:
+                        self.main_menu.set_mouse_state(event.pos, True)
+                        action = self.main_menu.handle_click()
+                        if action:
+                            self._handle_menu_action(action)
                     
-                    if action:
-                        if action == 'end_turn':
-                            self.end_turn()
-                        elif action == 'open_build_menu':
-                            self.ui.open_build_menu()
-                        elif action == 'close_build_menu':
-                            self.ui.close_build_menu()
-                        elif action == 'open_settings_menu':
-                            self.ui.open_settings_menu()
-                        elif action == 'close_settings_menu':
-                            self.ui.close_settings_menu()
-                        elif action == 'open_language_menu':
-                            self.ui.open_language_menu()
-                        elif action == 'close_language_menu':
-                            self.ui.close_language_menu()
-                        elif action == 'set_language_en':
-                            self.set_language('en')
-                            self.ui.close_language_menu()
-                            self.ui.close_settings_menu()
-                        elif action == 'set_language_zh':
-                            if self.ui.get_font_manager().is_chinese_available():
-                                self.set_language('zh')
+                    elif self.game_state == GAME_STATES['PLAYING']:
+                        action = self.ui.handle_click(event.pos, self.ui.buttons)
+                        
+                        if action:
+                            if action == 'end_turn':
+                                self.end_turn()
+                            elif action == 'open_build_menu':
+                                self.ui.open_build_menu()
+                            elif action == 'close_build_menu':
+                                self.ui.close_build_menu()
+                            elif action == 'open_settings_menu':
+                                self.ui.open_settings_menu()
+                            elif action == 'close_settings_menu':
+                                self.ui.close_settings_menu()
+                            elif action == 'open_language_menu':
+                                self.ui.open_language_menu()
+                            elif action == 'close_language_menu':
+                                self.ui.close_language_menu()
+                            elif action == 'set_language_en':
+                                self.set_language('en')
                                 self.ui.close_language_menu()
                                 self.ui.close_settings_menu()
-                            else:
-                                self.add_message("Chinese font not found. Put .ttf file in 'fonts/' folder.")
-                        elif action == 'show_font_help':
-                            font_info = self.ui.get_font_manager().get_chinese_font_info()
-                            search_paths = "\n  - ".join(font_info.get('search_paths', []))
-                            self.add_message("To use Chinese:")
-                            self.add_message("1. Create 'fonts/' folder in game directory")
-                            self.add_message("2. Put Chinese .ttf font file in it")
-                            self.add_message("3. Restart the game")
-                            if search_paths:
-                                self.add_message(f"Search paths: {search_paths}")
-                        elif action.startswith('build_'):
-                            building_type = action[6:]
-                            self.build_structure(building_type)
-                    else:
-                        q, r = self.get_screen_to_hex(mouse_pos[0], mouse_pos[1])
-                        self.handle_tile_click(q, r)
+                            elif action == 'set_language_zh':
+                                if self.ui.get_font_manager().is_chinese_available():
+                                    self.set_language('zh')
+                                    self.ui.close_language_menu()
+                                    self.ui.close_settings_menu()
+                                else:
+                                    self.add_message("Chinese font not found. Put .ttf file in 'fonts/' folder.")
+                            elif action == 'show_font_help':
+                                font_info = self.ui.get_font_manager().get_chinese_font_info()
+                                search_paths = "\n  - ".join(font_info.get('search_paths', []))
+                                self.add_message("To use Chinese:")
+                                self.add_message("1. Create 'fonts/' folder in game directory")
+                                self.add_message("2. Put Chinese .ttf font file in it")
+                                self.add_message("3. Restart the game")
+                                if search_paths:
+                                    self.add_message(f"Search paths: {search_paths}")
+                            elif action.startswith('build_'):
+                                building_type = action[6:]
+                                self.build_structure(building_type)
+                        else:
+                            q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
+                            self.handle_tile_click(q, r)
+                    
+                    elif self.game_state == GAME_STATES['HELP']:
+                        self.help_menu.set_mouse_state(event.pos, True)
+                        action = self.help_menu.handle_click()
+                        if action:
+                            self._handle_menu_action(action)
             
-            elif event.type == pygame.MOUSEMOTION:
-                pass
+            elif event.type == pygame.MOUSEBUTTONUP:
+                self.mouse_buttons_pressed[event.button] = False
+                
+                if self.game_state == GAME_STATES['MENU']:
+                    self.main_menu.set_mouse_state(self.mouse_pos, False)
+                elif self.game_state == GAME_STATES['HELP']:
+                    self.help_menu.set_mouse_state(self.mouse_pos, False)
+            
+            elif event.type == pygame.MOUSEWHEEL:
+                if self.game_state == GAME_STATES['HELP']:
+                    self.help_menu.handle_scroll(event.y)
         
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            self.map_offset_x += 5
-        if keys[pygame.K_RIGHT]:
-            self.map_offset_x -= 5
-        if keys[pygame.K_UP]:
-            self.map_offset_y += 5
-        if keys[pygame.K_DOWN]:
-            self.map_offset_y -= 5
+        if self.game_state == GAME_STATES['PLAYING']:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                self.map_offset_x += 5
+            if keys[pygame.K_RIGHT]:
+                self.map_offset_x -= 5
+            if keys[pygame.K_UP]:
+                self.map_offset_y += 5
+            if keys[pygame.K_DOWN]:
+                self.map_offset_y -= 5
+            
+            if keys[pygame.K_ESCAPE]:
+                self.game_state = GAME_STATES['MENU']
+    
+    def _handle_menu_action(self, action: str):
+        if action == 'start_game':
+            self.new_game()
+            self.game_state = GAME_STATES['PLAYING']
+        
+        elif action == 'show_help':
+            self.previous_state = self.game_state
+            self.game_state = GAME_STATES['HELP']
+        
+        elif action == 'show_settings':
+            pass
+        
+        elif action == 'quit_game':
+            self.running = False
+        
+        elif action == 'back_to_menu':
+            self.game_state = GAME_STATES['MENU']
+        
+        elif action == 'set_language_en':
+            self.set_language('en')
+            self.game_state = GAME_STATES['MENU']
+        
+        elif action == 'set_language_zh':
+            if self.ui.get_font_manager().is_chinese_available():
+                self.set_language('zh')
+                self.game_state = GAME_STATES['MENU']
+            else:
+                print("Chinese font not available")
+        
+        elif action == 'show_font_help':
+            pass
     
     def run(self):
-        self.new_game()
-        
         while self.running:
             self.handle_events()
             self.draw()

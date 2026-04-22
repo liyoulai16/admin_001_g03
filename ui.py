@@ -2,16 +2,18 @@ import pygame
 from typing import Dict, Optional, Tuple, List
 from config import (
     UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR, SELECTED_COLOR,
-    BUILDING_INFO
+    BUILDING_INFO, UI_COLORS
 )
 from player import Player, Building, Unit
 from hex_map import HexMap, HexTile
 from localization import Localization
 from font_manager import FontManager
+from animation import AnimationManager, ButtonAnimation
 
 
 class UI:
-    def __init__(self, screen_width: int, screen_height: int, localization: Localization):
+    def __init__(self, screen_width: int, screen_height: int, localization: Localization, 
+                 animation_manager: AnimationManager = None):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.panel_width = 250
@@ -31,6 +33,11 @@ class UI:
         self.unit_menu_open = False
         
         self._language_warning_shown = False
+        
+        self.animation_manager = animation_manager
+        self.button_states: Dict[str, Dict] = {}
+        self.mouse_pos = (0, 0)
+        self.mouse_down = False
     
     def _init_fonts(self):
         language = self.loc.get_language()
@@ -280,21 +287,83 @@ class UI:
         self.buttons.append(close_button)
         self._draw_button(screen, close_button, small=True)
     
+    def set_mouse_state(self, mouse_pos: Tuple[int, int], mouse_down: bool):
+        self.mouse_pos = mouse_pos
+        self.mouse_down = mouse_down
+    
+    def _get_button_id(self, button: Dict) -> str:
+        action = button.get('action', '')
+        text = button.get('text', '')
+        return f"{action}_{text}"
+    
     def _draw_button(self, screen: pygame.Surface, button: Dict, small: bool = False):
-        pygame.draw.rect(screen, button['color'], button['rect'])
-        pygame.draw.rect(screen, (50, 50, 50), button['rect'], 2)
+        button_id = self._get_button_id(button)
+        
+        if self.animation_manager:
+            button_anim = self.animation_manager.get_button_animation(button_id)
+            is_hovered = button['rect'].collidepoint(self.mouse_pos)
+            dt = self.animation_manager.get_dt() if self.animation_manager else 0.016
+            button_anim.update(is_hovered, self.mouse_down, dt)
+            
+            scale = button_anim.scale
+            color_offset = button_anim.color_offset
+            border_width = button_anim.border_width
+        else:
+            scale = 1.0
+            color_offset = 0
+            border_width = 2
+            is_hovered = button['rect'].collidepoint(self.mouse_pos)
+            if is_hovered:
+                border_width = 3
+        
+        rect = button['rect']
+        if scale != 1.0:
+            center_x = rect.centerx
+            center_y = rect.centery
+            new_width = int(rect.width * scale)
+            new_height = int(rect.height * scale)
+            draw_rect = pygame.Rect(
+                center_x - new_width // 2,
+                center_y - new_height // 2,
+                new_width,
+                new_height
+            )
+        else:
+            draw_rect = rect.copy()
+        
+        base_color = button['color']
+        if color_offset != 0:
+            draw_color = (
+                max(0, min(255, base_color[0] + color_offset)),
+                max(0, min(255, base_color[1] + color_offset)),
+                max(0, min(255, base_color[2] + color_offset))
+            )
+        else:
+            draw_color = base_color
+        
+        if is_hovered and color_offset == 0:
+            draw_color = (
+                min(255, base_color[0] + 20),
+                min(255, base_color[1] + 20),
+                min(255, base_color[2] + 20)
+            )
+        
+        pygame.draw.rect(screen, draw_color, draw_rect)
+        
+        border_color = UI_COLORS.get('highlight_border', (100, 200, 255)) if is_hovered else (50, 50, 50)
+        pygame.draw.rect(screen, border_color, draw_rect, border_width)
         
         font = self.font_small if small else self.font_medium
         text = button.get('text', '')
         
         try:
             text_surface = font.render(text, True, TEXT_COLOR)
-            text_rect = text_surface.get_rect(center=button['rect'].center)
+            text_rect = text_surface.get_rect(center=draw_rect.center)
             screen.blit(text_surface, text_rect)
         except Exception as e:
             fallback_font = pygame.font.Font(None, 16 if small else 20)
             text_surface = fallback_font.render(text, True, TEXT_COLOR)
-            text_rect = text_surface.get_rect(center=button['rect'].center)
+            text_rect = text_surface.get_rect(center=draw_rect.center)
             screen.blit(text_surface, text_rect)
     
     def handle_click(self, mouse_pos: Tuple[int, int], buttons: List[Dict]) -> Optional[str]:
