@@ -23,49 +23,49 @@ TERRAIN_COLORS = {
 }
 
 TERRAIN_NAMES = {
-    'plain': '平原',
-    'forest': '森林',
-    'mountain': '山脉',
-    'water': '水域',
-    'hill': '丘陵',
+    'plain': 'Plain',
+    'forest': 'Forest',
+    'mountain': 'Mountain',
+    'water': 'Water',
+    'hill': 'Hill',
 }
 
 BUILDING_INFO = {
     'town': {
-        'name': '城镇',
+        'name': 'Town',
         'cost': {'gold': 100, 'wood': 50},
         'production': {'gold': 10, 'wood': 0, 'food': 5},
-        'description': '每回合产出金币和食物',
+        'description': 'Produces gold and food per turn',
     },
     'barracks': {
-        'name': '兵营',
+        'name': 'Barracks',
         'cost': {'gold': 80, 'wood': 60},
         'production': {'gold': 0, 'wood': 0, 'food': 0},
-        'description': '允许训练军队',
+        'description': 'Allows training units',
     },
     'farm': {
-        'name': '农场',
+        'name': 'Farm',
         'cost': {'gold': 50, 'wood': 30},
         'production': {'gold': 0, 'wood': 0, 'food': 10},
-        'description': '每回合产出食物',
+        'description': 'Produces food per turn',
     },
     'tower': {
-        'name': '防御塔',
+        'name': 'Tower',
         'cost': {'gold': 60, 'wood': 40},
         'production': {'gold': 0, 'wood': 0, 'food': 0},
-        'description': '提供防御加成',
+        'description': 'Provides defense bonus',
     },
     'lumbermill': {
-        'name': '伐木场',
+        'name': 'Lumbermill',
         'cost': {'gold': 40, 'wood': 20},
         'production': {'gold': 0, 'wood': 8, 'food': 0},
-        'description': '每回合产出木材',
+        'description': 'Produces wood per turn',
     },
 }
 
 UNIT_INFO = {
     'warrior': {
-        'name': '战士',
+        'name': 'Warrior',
         'cost': {'gold': 30, 'wood': 10, 'food': 20},
         'attack': 10,
         'defense': 8,
@@ -73,7 +73,7 @@ UNIT_INFO = {
         'movement': 2,
     },
     'archer': {
-        'name': '弓箭手',
+        'name': 'Archer',
         'cost': {'gold': 25, 'wood': 20, 'food': 15},
         'attack': 12,
         'defense': 5,
@@ -95,13 +95,13 @@ AI_START_RESOURCES = {
 }
 
 RESOURCE_ICONS = {
-    'gold': '💰',
-    'wood': '🪵',
-    'food': '🍖',
+    'gold': 'G',
+    'wood': 'W',
+    'food': 'F',
 }
 
 RESOURCE_NAMES = {
-    'gold': '金币',
-    'wood': '木材',
-    'food': '食物',
+    'gold': 'Gold',
+    'wood': 'Wood',
+    'food': 'Food',
 }

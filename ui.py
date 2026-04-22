@@ -15,14 +15,12 @@ class UI:
         self.panel_width = 250
         self.panel_x = screen_width - self.panel_width
         
-        try:
-            self.font_large = pygame.font.SysFont('simhei', 20)
-            self.font_medium = pygame.font.SysFont('simhei', 16)
-            self.font_small = pygame.font.SysFont('simhei', 14)
-        except:
-            self.font_large = pygame.font.Font(None, 24)
-            self.font_medium = pygame.font.Font(None, 20)
-            self.font_small = pygame.font.Font(None, 18)
+        if not pygame.font.get_init():
+            pygame.font.init()
+        
+        self.font_large = pygame.font.Font(None, 28)
+        self.font_medium = pygame.font.Font(None, 22)
+        self.font_small = pygame.font.Font(None, 18)
         
         self.buttons: List[Dict] = []
         self.build_menu_open = False
@@ -34,7 +32,7 @@ class UI:
         pygame.draw.line(screen, (100, 100, 100), 
                         (self.panel_x, 0), (self.panel_x, self.screen_height), 2)
         
-        turn_text = self.font_large.render(f"回合: {turn}", True, TEXT_COLOR)
+        turn_text = self.font_large.render(f"Turn: {turn}", True, TEXT_COLOR)
         screen.blit(turn_text, (self.panel_x + 10, 10))
         
         y_offset = 45
@@ -49,31 +47,31 @@ class UI:
         panel_rect = pygame.Rect(self.panel_x, 130, self.panel_width, 180)
         pygame.draw.rect(screen, UI_PANEL_COLOR, panel_rect)
         
-        title = self.font_large.render("地块信息", True, TEXT_COLOR)
+        title = self.font_large.render("Tile Info", True, TEXT_COLOR)
         screen.blit(title, (self.panel_x + 10, 140))
         
         if tile is None:
-            no_info = self.font_medium.render("未选中地块", True, (150, 150, 150))
+            no_info = self.font_medium.render("No tile selected", True, (150, 150, 150))
             screen.blit(no_info, (self.panel_x + 10, 170))
             return
         
         terrain_name = TERRAIN_NAMES.get(tile.terrain, tile.terrain)
-        terrain_text = self.font_medium.render(f"地形: {terrain_name}", True, TEXT_COLOR)
+        terrain_text = self.font_medium.render(f"Terrain: {terrain_name}", True, TEXT_COLOR)
         screen.blit(terrain_text, (self.panel_x + 10, 170))
         
-        owner_text = self.font_medium.render(f"所有者: {tile.owner.name if tile.owner else '无'}", 
+        owner_text = self.font_medium.render(f"Owner: {tile.owner.name if tile.owner else 'None'}", 
                                              True, TEXT_COLOR)
         screen.blit(owner_text, (self.panel_x + 10, 195))
         
         if tile.building:
-            building_text = self.font_medium.render(f"建筑: {tile.building.name}", True, TEXT_COLOR)
+            building_text = self.font_medium.render(f"Building: {tile.building.name}", True, TEXT_COLOR)
             screen.blit(building_text, (self.panel_x + 10, 220))
             hp_text = self.font_small.render(f"HP: {tile.building.health}/{tile.building.max_health}", 
                                              True, TEXT_COLOR)
             screen.blit(hp_text, (self.panel_x + 20, 245))
         
         if tile.unit:
-            unit_text = self.font_medium.render(f"单位: {tile.unit.name}", True, TEXT_COLOR)
+            unit_text = self.font_medium.render(f"Unit: {tile.unit.name}", True, TEXT_COLOR)
             screen.blit(unit_text, (self.panel_x + 10, 270 if tile.building else 220))
             hp_text = self.font_small.render(f"HP: {tile.unit.health}/{tile.unit.max_health}", 
                                              True, TEXT_COLOR)
@@ -89,7 +87,7 @@ class UI:
         
         end_turn_button = {
             'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-            'text': '结束回合',
+            'text': 'End Turn',
             'action': 'end_turn',
             'color': (80, 150, 100)
         }
@@ -102,7 +100,7 @@ class UI:
             if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
                 build_button = {
                     'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-                    'text': '建造建筑',
+                    'text': 'Build',
                     'action': 'open_build_menu',
                     'color': (100, 100, 180)
                 }
@@ -111,9 +109,9 @@ class UI:
                 button_y += button_height + 10
             
             if selected_tile.unit:
-                move_text = '已移动' if selected_tile.unit.moved_this_turn else '可移动'
-                attack_text = '已攻击' if selected_tile.unit.attacked_this_turn else '可攻击'
-                info_text = f"单位状态: {move_text}, {attack_text}"
+                move_text = 'Moved' if selected_tile.unit.moved_this_turn else 'Can move'
+                attack_text = 'Attacked' if selected_tile.unit.attacked_this_turn else 'Can attack'
+                info_text = f"Status: {move_text}, {attack_text}"
                 info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
                 screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
         
@@ -127,7 +125,7 @@ class UI:
         menu_height = 30
         menu_width = self.panel_width - 30
         
-        title = self.font_medium.render("选择建筑:", True, TEXT_COLOR)
+        title = self.font_medium.render("Select Building:", True, TEXT_COLOR)
         screen.blit(title, (self.panel_x + 15, menu_y))
         menu_y += 35
         
@@ -153,7 +151,7 @@ class UI:
         
         close_button = {
             'rect': pygame.Rect(self.panel_x + 15, menu_y, menu_width, menu_height),
-            'text': '取消',
+            'text': 'Cancel',
             'action': 'close_build_menu',
             'color': (120, 80, 80)
         }
@@ -189,7 +187,7 @@ class UI:
         pygame.draw.rect(screen, (30, 35, 45), panel_rect)
         pygame.draw.rect(screen, (80, 80, 80), panel_rect, 1)
         
-        title = self.font_medium.render("战斗日志", True, TEXT_COLOR)
+        title = self.font_medium.render("Combat Log", True, TEXT_COLOR)
         screen.blit(title, (20, log_y + 5))
         
         start_idx = max(0, len(messages) - max_messages)

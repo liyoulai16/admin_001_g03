@@ -11,7 +11,7 @@ class Player:
         self.tiles_owned = 0
         self.buildings = []
         self.units = []
-        self.name = f"玩家 {player_id}" if not is_ai else f"AI {player_id}"
+        self.name = f"Player {player_id}" if not is_ai else f"AI {player_id}"
         
         self._init_resources(is_ai)
     

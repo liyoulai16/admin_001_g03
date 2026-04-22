@@ -19,7 +19,7 @@ class Game:
         pygame.font.init()
         
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("回合制策略游戏 - 六边形地图")
+        pygame.display.set_caption("Turn-based Strategy - Hex Map")
         self.clock = pygame.time.Clock()
         
         self.ui = UI(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -70,7 +70,7 @@ class Game:
         self.turn = 1
         self.selected_tile = None
         self.selected_unit = None
-        self.game_messages = ["游戏开始！你是玩家1 (蓝色)"]
+        self.game_messages = ["Game started! You are Player 1 (Blue)"]
         self.ui.close_build_menu()
     
     def get_current_player(self) -> Player:
@@ -142,9 +142,9 @@ class Game:
             unit.owner.tiles_owned += 1
             
             if old_owner:
-                msg = f"{unit.name}占领了敌方地块！"
+                msg = f"{unit.name} captured enemy tile!"
             else:
-                msg = f"{unit.name}占领了中立地块"
+                msg = f"{unit.name} captured neutral tile"
             self.add_message(msg)
         
         self.select_tile(target_tile)
@@ -157,12 +157,12 @@ class Game:
             damage = max(1, unit.attack - target.defense // 2)
             target.health -= damage
             
-            msg = f"{unit.name}攻击{target.name}，造成{damage}点伤害"
+            msg = f"{unit.name} attacked {target.name}, {damage} damage"
             
             if target.health <= 0:
                 target.owner.remove_unit(target)
                 target_tile.unit = None
-                msg += f"，{target.name}被消灭！"
+                msg += f", {target.name} destroyed!"
             
             self.add_message(msg)
         
@@ -171,12 +171,12 @@ class Game:
             damage = max(1, unit.attack - 5)
             target.health -= damage
             
-            msg = f"{unit.name}攻击{target.name}，造成{damage}点伤害"
+            msg = f"{unit.name} attacked {target.name}, {damage} damage"
             
             if target.health <= 0:
                 target.owner.remove_building(target)
                 target_tile.building = None
-                msg += f"，{target.name}被摧毁！"
+                msg += f", {target.name} destroyed!"
             
             self.add_message(msg)
         
@@ -187,7 +187,7 @@ class Game:
                 
                 target_tile.owner = unit.owner
                 unit.owner.tiles_owned += 1
-                self.add_message(f"{unit.name}占领了敌方地块！")
+                self.add_message(f"{unit.name} captured enemy tile!")
         
         self.select_tile(target_tile)
     
@@ -197,11 +197,11 @@ class Game:
         
         player = self.get_current_player()
         if self.selected_tile.owner != player:
-            self.add_message("只能在自己的地块上建造！")
+            self.add_message("Can only build on your own tiles!")
             return
         
         if self.selected_tile.building:
-            self.add_message("该地块已有建筑！")
+            self.add_message("Tile already has a building!")
             return
         
         if building_type not in BUILDING_INFO:
@@ -209,7 +209,7 @@ class Game:
         
         cost = BUILDING_INFO[building_type]['cost']
         if not player.can_afford(cost):
-            self.add_message("资源不足！")
+            self.add_message("Not enough resources!")
             return
         
         if player.spend_resources(cost):
@@ -218,7 +218,7 @@ class Game:
             player.add_building(building)
             
             name = BUILDING_INFO[building_type]['name']
-            self.add_message(f"建造了{name}")
+            self.add_message(f"Built {name}")
             self.ui.close_build_menu()
     
     def end_turn(self):
@@ -236,7 +236,7 @@ class Game:
         self.ui.close_build_menu()
         
         if next_player.is_ai and next_player.player_id in self.ais:
-            self.add_message(f"--- AI {next_player.player_id} 回合 ---")
+            self.add_message(f"--- AI {next_player.player_id} Turn ---")
             ai = self.ais[next_player.player_id]
             result = ai.take_turn(self.hex_map)
             
@@ -252,7 +252,7 @@ class Game:
             
             income_str = ", ".join([f"{k}+{v}" for k, v in income.items() if v > 0])
             if income_str:
-                self.add_message(f"新回合！获得资源: {income_str}")
+                self.add_message(f"New turn! Gained: {income_str}")
         else:
             if self.current_player_idx == 0:
                 self.turn += 1
@@ -262,7 +262,7 @@ class Game:
             
             income_str = ", ".join([f"{k}+{v}" for k, v in income.items() if v > 0])
             if income_str:
-                self.add_message(f"新回合！获得资源: {income_str}")
+                self.add_message(f"New turn! Gained: {income_str}")
         
         self.check_game_end()
     
@@ -270,7 +270,7 @@ class Game:
         for player in self.players:
             if player.tiles_owned <= 0 and len(player.units) <= 0:
                 winner = [p for p in self.players if p != player][0]
-                self.add_message(f"游戏结束！{winner.name}获胜！")
+                self.add_message(f"Game over! {winner.name} wins!")
                 self.running = False
                 return
     
@@ -305,7 +305,7 @@ class Game:
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
         turn_indicator = self.ui.font_large.render(
-            f"当前: {self.get_current_player().name}", 
+            f"Current: {self.get_current_player().name}", 
             True, self.get_current_player().color
         )
         self.screen.blit(turn_indicator, (10, 10))
