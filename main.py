@@ -15,6 +15,7 @@ from localization import Localization
 from animation import AnimationManager
 from menu import MainMenu, SettingsMenu
 from help_menu import HelpMenu
+from popup import SettingsPopup, BuildPopup
 
 
 class Game:
@@ -56,6 +57,42 @@ class Game:
         self.mouse_pos = (0, 0)
         self.mouse_down = False
         self.mouse_buttons_pressed = {1: False, 2: False, 3: False}
+        
+        self.settings_popup = None
+        self.build_popup = None
+        self._popup_initialized = False
+    
+    def _init_popups(self):
+        if self._popup_initialized:
+            return
+        
+        self.settings_popup = SettingsPopup(
+            300, 280, self.loc, self.ui.get_font_manager()
+        )
+        self.settings_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
+        
+        if self.players:
+            self.build_popup = BuildPopup(
+                300, 350, self.loc, self.ui.get_font_manager(),
+                self.get_current_player()
+            )
+            self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
+        
+        self._popup_initialized = True
+    
+    def _refresh_popups(self):
+        if self._popup_initialized:
+            if self.players:
+                self.settings_popup = SettingsPopup(
+                    300, 280, self.loc, self.ui.get_font_manager()
+                )
+                self.settings_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
+                
+                self.build_popup = BuildPopup(
+                    300, 350, self.loc, self.ui.get_font_manager(),
+                    self.get_current_player()
+                )
+                self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
     
     def set_language(self, language: str):
         self.loc.set_language(language)
@@ -397,6 +434,9 @@ class Game:
     def _draw_game(self):
         self.screen.fill(BACKGROUND_COLOR)
         
+        if not self._popup_initialized:
+            self._init_popups()
+        
         if self.animation_manager:
             self.animation_manager.update_all()
             dt = self.animation_manager.get_dt()
@@ -454,6 +494,8 @@ class Game:
             True, self.get_current_player().color
         )
         self.screen.blit(turn_indicator, (10, 10))
+        
+        self._draw_popups()
     
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
@@ -513,54 +555,43 @@ class Game:
                             self._handle_menu_action(action)
                     
                     elif self.game_state == GAME_STATES['PLAYING']:
-                        action = self.ui.handle_click(event.pos, self.ui.buttons)
+                        settings_visible = self.settings_popup and self.settings_popup.visible
+                        build_visible = self.build_popup and self.build_popup.visible
                         
-                        if action:
-                            if action == 'end_turn':
-                                self.end_turn()
-                            elif action == 'open_build_menu':
-                                self.ui.open_build_menu()
-                            elif action == 'close_build_menu':
-                                self.ui.close_build_menu()
-                            elif action == 'open_settings_menu':
-                                self.ui.open_settings_menu()
-                            elif action == 'close_settings_menu':
-                                self.ui.close_settings_menu()
-                            elif action == 'open_language_menu':
-                                self.ui.open_language_menu()
-                            elif action == 'close_language_menu':
-                                self.ui.close_language_menu()
-                            elif action == 'set_language_en':
-                                self.set_language('en')
-                                self.ui.close_language_menu()
-                                self.ui.close_settings_menu()
-                            elif action == 'set_language_zh':
-                                if self.ui.get_font_manager().is_chinese_available():
-                                    self.set_language('zh')
-                                    self.ui.close_language_menu()
-                                    self.ui.close_settings_menu()
-                                else:
-                                    self.add_message("Chinese font not found. Put .ttf file in 'fonts/' folder.")
-                            elif action == 'show_font_help':
-                                font_info = self.ui.get_font_manager().get_chinese_font_info()
-                                search_paths = "\n  - ".join(font_info.get('search_paths', []))
-                                self.add_message("To use Chinese:")
-                                self.add_message("1. Create 'fonts/' folder in game directory")
-                                self.add_message("2. Put Chinese .ttf font file in it")
-                                self.add_message("3. Restart the game")
-                                if search_paths:
-                                    self.add_message(f"Search paths: {search_paths}")
-                            elif action.startswith('build_'):
-                                building_type = action[6:]
-                                self.build_structure(building_type)
-                            elif action == 'return_to_menu':
-                                self.game_state = GAME_STATES['MENU']
-                                self.ui.close_build_menu()
-                                self.ui.close_settings_menu()
-                                self.ui.close_language_menu()
+                        popup_action = None
+                        if settings_visible:
+                            self.settings_popup.set_mouse_state(event.pos, True)
+                            popup_action = self.settings_popup.handle_click()
+                        elif build_visible:
+                            self.build_popup.set_mouse_state(event.pos, True)
+                            popup_action = self.build_popup.handle_click()
+                        
+                        if popup_action:
+                            self._handle_popup_action(popup_action)
                         else:
-                            q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
-                            self.handle_tile_click(q, r)
+                            action = self.ui.handle_click(event.pos, self.ui.buttons)
+                            
+                            if action:
+                                if action == 'end_turn':
+                                    self.end_turn()
+                                elif action == 'open_settings_popup':
+                                    if self.settings_popup:
+                                        self.settings_popup.show()
+                                elif action == 'open_build_popup':
+                                    if self.build_popup:
+                                        if self.players:
+                                            self.build_popup.update_player(self.get_current_player())
+                                        self.build_popup.show()
+                                elif action == 'return_to_menu':
+                                    if self.settings_popup:
+                                        self.settings_popup.hide()
+                                    if self.build_popup:
+                                        self.build_popup.hide()
+                                    self.game_state = GAME_STATES['MENU']
+                            else:
+                                if not (settings_visible or build_visible):
+                                    q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
+                                    self.handle_tile_click(q, r)
                     
                     elif self.game_state == GAME_STATES['SETTINGS']:
                         self.settings_menu.set_mouse_state(event.pos, True)
@@ -601,6 +632,59 @@ class Game:
             
             if keys[pygame.K_ESCAPE]:
                 self.game_state = GAME_STATES['MENU']
+    
+    def _draw_popups(self):
+        if not self._popup_initialized:
+            return
+        
+        dt = self.animation_manager.get_dt() if self.animation_manager else 0.016
+        
+        settings_visible = self.settings_popup and self.settings_popup.visible
+        build_visible = self.build_popup and self.build_popup.visible
+        
+        if settings_visible:
+            self.settings_popup.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
+            self.settings_popup.update(dt)
+            self.settings_popup.draw(self.screen)
+        
+        elif build_visible:
+            self.build_popup.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
+            if self.players:
+                self.build_popup.update_player(self.get_current_player())
+            self.build_popup.update(dt)
+            self.build_popup.draw(self.screen)
+    
+    def _handle_popup_action(self, action: str):
+        if action == 'close':
+            if self.settings_popup and self.settings_popup.visible:
+                self.settings_popup.hide()
+            if self.build_popup and self.build_popup.visible:
+                self.build_popup.hide()
+        
+        elif action == 'set_language_en':
+            self.set_language('en')
+            if self.settings_popup:
+                self.settings_popup.hide()
+        
+        elif action == 'set_language_zh':
+            if self.ui.get_font_manager().is_chinese_available():
+                self.set_language('zh')
+                if self.settings_popup:
+                    self.settings_popup.hide()
+            else:
+                self.add_message("Chinese font not found. Put .ttf file in 'fonts/' folder.")
+        
+        elif action == 'show_font_help':
+            self.add_message("To use Chinese:")
+            self.add_message("1. Create 'fonts/' folder in game directory")
+            self.add_message("2. Put Chinese .ttf font file in it")
+            self.add_message("3. Restart the game")
+        
+        elif action.startswith('build_'):
+            building_type = action[6:]
+            self.build_structure(building_type)
+            if self.build_popup:
+                self.build_popup.hide()
     
     def _handle_menu_action(self, action: str):
         if action == 'start_game':
