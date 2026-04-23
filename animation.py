@@ -147,24 +147,15 @@ class ButtonAnimation:
         self.border_width = 2
     
     def update(self, is_mouse_over: bool, is_mouse_down: bool, dt: float):
-        target_hover = 1.0 if is_mouse_over else 0.0
-        hover_speed = 5.0
-        self.hover_progress += (target_hover - self.hover_progress) * hover_speed * dt
-        self.hover_progress = max(0.0, min(1.0, self.hover_progress))
+        self.hover_progress = 1.0 if is_mouse_over else 0.0
         
-        if is_mouse_down and is_mouse_over:
-            if not self.is_clicked:
-                self.is_clicked = True
-                self.click_progress = 0.0
-        else:
-            if self.is_clicked:
-                self.is_clicked = False
+        was_clicked = self.is_clicked
+        self.is_clicked = is_mouse_down and is_mouse_over
         
-        click_speed = BUTTON_ANIMATION.get('click_release_speed', 4.0)
         if self.is_clicked:
-            self.click_progress = min(self.click_progress + dt * 12, 1.0)
+            self.click_progress = 1.0
         else:
-            self.click_progress = max(self.click_progress - dt * click_speed, 0.0)
+            self.click_progress = 0.0
         
         hover_scale = BUTTON_ANIMATION['hover_scale']
         click_scale = BUTTON_ANIMATION['click_scale']
