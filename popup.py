@@ -21,10 +21,7 @@ class PopupButton:
         self.target_visible = True
         
     def update(self, mouse_pos: Tuple[int, int], mouse_down: bool, dt: float):
-        if self.target_visible:
-            self.anim_progress = min(self.anim_progress + dt * 25.0, 1.0)
-        else:
-            self.anim_progress = max(self.anim_progress - dt * 20.0, 0.0)
+        self.anim_progress = 1.0
         
         self.hovered = self.enabled and self.rect.collidepoint(mouse_pos)
         
@@ -66,16 +63,20 @@ class BasePopup:
         
     def update(self, dt: float):
         if self.visible:
-            self.anim_progress = min(self.anim_progress + dt * 20.0, 1.0)
+            self.anim_progress = 1.0
         else:
             self.anim_progress = max(self.anim_progress - dt * 15.0, 0.0)
         
+        local_mouse_pos = (self.mouse_pos[0] - self.x, self.mouse_pos[1] - self.y)
+        
         for button in self.buttons:
-            button.update(self.mouse_pos, self.mouse_down, dt)
+            button.update(local_mouse_pos, self.mouse_down, dt)
     
     def show(self):
         self.visible = True
-        self.anim_progress = max(self.anim_progress, 0.1)
+        self.anim_progress = 1.0
+        for button in self.buttons:
+            button.anim_progress = 1.0
         self.result = None
     
     def hide(self):
@@ -87,18 +88,12 @@ class BasePopup:
         self.mouse_down = mouse_down
     
     def handle_click(self) -> Optional[str]:
-        if not self.visible or self.anim_progress < 0.1:
+        if not self.visible:
             return None
         
         if self.mouse_was_down and not self.mouse_down:
             for button in self.buttons:
-                button_screen_rect = pygame.Rect(
-                    button.rect.x + self.x,
-                    button.rect.y + self.y,
-                    button.rect.width,
-                    button.rect.height
-                )
-                if button.enabled and button_screen_rect.collidepoint(self.mouse_pos):
+                if button.enabled and button.hovered:
                     return button.action
             
             if not self._is_point_in_popup(self.mouse_pos):
@@ -114,21 +109,12 @@ class BasePopup:
         if self.anim_progress <= 0:
             return
         
-        def ease_out_cubic(t):
-            return 1 - math.pow(1 - t, 3) if t < 1 else 1
+        draw_x = self.x
+        draw_y = self.y
+        draw_width = self.width
+        draw_height = self.height
         
-        eased_progress = ease_out_cubic(self.anim_progress)
-        
-        scale = 0.9 + 0.1 * eased_progress
-        alpha = int(255 * eased_progress)
-        
-        draw_width = int(self.width * scale)
-        draw_height = int(self.height * scale)
-        draw_x = self.x + (self.width - draw_width) // 2
-        draw_y = self.y + (self.height - draw_height) // 2
-        
-        shadow_rect = pygame.Rect(draw_x + 5, draw_y + 5, draw_width, draw_height)
-        shadow_alpha = int(60 * eased_progress)
+        shadow_alpha = 60
         shadow_surface = pygame.Surface((draw_width, draw_height), pygame.SRCALPHA)
         shadow_surface.fill((0, 0, 0, shadow_alpha))
         screen.blit(shadow_surface, (draw_x + 5, draw_y + 5))
@@ -138,26 +124,23 @@ class BasePopup:
             UI_COLORS['menu_background'][0],
             UI_COLORS['menu_background'][1],
             UI_COLORS['menu_background'][2],
-            alpha
+            255
         )
         popup_surface.fill(popup_color)
         border_color = (
             UI_COLORS['highlight_border'][0],
             UI_COLORS['highlight_border'][1],
             UI_COLORS['highlight_border'][2],
-            alpha
+            255
         )
         pygame.draw.rect(popup_surface, border_color, popup_surface.get_rect(), 3)
         
         screen.blit(popup_surface, (draw_x, draw_y))
         
-        if eased_progress > 0.1:
-            title_alpha = int(255 * min(1, (eased_progress - 0.1) * 3))
-            self._draw_title(screen, draw_x, draw_y, draw_width, title_alpha)
-            
-            for button in self.buttons:
-                if button.anim_progress > 0.05:
-                    self._draw_popup_button(screen, button, draw_x, draw_y)
+        self._draw_title(screen, draw_x, draw_y, draw_width, 255)
+        
+        for button in self.buttons:
+            self._draw_popup_button(screen, button, draw_x, draw_y)
     
     def _draw_title(self, screen: pygame.Surface, x: int, y: int, width: int, alpha: int):
         title_font = self.font_manager.get_font(28, self.loc.get_language())
@@ -173,15 +156,8 @@ class BasePopup:
     
     def _draw_popup_button(self, screen: pygame.Surface, button: PopupButton, 
                           popup_x: int, popup_y: int):
-        def ease_out_cubic(t):
-            return 1 - math.pow(1 - t, 3) if t < 1 else 1
-        
-        anim_progress = button.anim_progress
-        if anim_progress <= 0:
+        if not button.enabled:
             return
-        
-        eased = ease_out_cubic(anim_progress)
-        alpha = int(255 * min(1, anim_progress * 2))
         
         scale = 1.0
         if button.pressed:
@@ -218,19 +194,12 @@ class BasePopup:
         else:
             draw_color = base_color
         
-        draw_color_with_alpha = (
-            draw_color[0],
-            draw_color[1],
-            draw_color[2],
-            alpha
-        )
-        
-        button_surface = pygame.Surface((draw_rect.width, draw_rect.height), pygame.SRCALPHA)
-        button_surface.fill(draw_color_with_alpha)
+        button_surface = pygame.Surface((draw_rect.width, draw_rect.height))
+        button_surface.fill(draw_color)
         
         border_color = UI_COLORS['highlight_border'] if button.hovered else (60, 70, 80)
         border_width = 3 if button.hovered else 2
-        pygame.draw.rect(button_surface, (*border_color, alpha), 
+        pygame.draw.rect(button_surface, border_color, 
                         button_surface.get_rect(), border_width)
         
         screen.blit(button_surface, draw_rect)
@@ -242,7 +211,6 @@ class BasePopup:
             fallback_font = pygame.font.Font(None, 22)
             text_surface = fallback_font.render(button.text, True, UI_COLORS['menu_text'])
         
-        text_surface.set_alpha(alpha)
         text_rect = text_surface.get_rect(center=draw_rect.center)
         screen.blit(text_surface, text_rect)
 
