@@ -52,6 +52,10 @@ class Game:
         self.map_offset_x = 50
         self.map_offset_y = 50
         
+        self.unit_selection_pending: bool = False
+        self.unit_selection_tile: Optional[HexTile] = None
+        self.unit_selection_buttons: List[Dict] = []
+        
         self.game_messages: List[str] = []
         self.running = True
         
@@ -204,10 +208,22 @@ class Game:
         tile.selected = True
         self.ui.close_build_menu()
         
-        if tile.unit and tile.unit.owner == self.get_current_player():
+        self.unit_selection_pending = False
+        self.unit_selection_tile = None
+        self.unit_selection_buttons = []
+        
+        current_player = self.get_current_player()
+        has_military = tile.unit and tile.unit.owner == current_player
+        has_builder = tile.builder_unit and tile.builder_unit.owner == current_player
+        
+        if has_military and has_builder:
+            self.unit_selection_pending = True
+            self.unit_selection_tile = tile
+            self._create_unit_selection_buttons(tile)
+        elif has_military:
             self.selected_unit = tile.unit
             self.show_unit_range(tile.unit)
-        elif tile.builder_unit and tile.builder_unit.owner == self.get_current_player():
+        elif has_builder:
             self.selected_unit = tile.builder_unit
             self.show_unit_range(tile.builder_unit)
     
@@ -225,6 +241,85 @@ class Game:
                 target_tile = self.hex_map.get_tile(q, r)
                 if target_tile and unit.can_attack(self.hex_map, q, r):
                     target_tile.attackable = True
+    
+    def _create_unit_selection_buttons(self, tile: HexTile):
+        x, y = self.hex_map.hex_to_pixel(tile.q, tile.r)
+        screen_x = x + self.map_offset_x
+        screen_y = y + self.map_offset_y
+        
+        button_width = 70
+        button_height = 25
+        
+        military_unit_name = self.loc.get_unit_name(tile.unit.unit_type) if tile.unit else "Military"
+        builder_unit_name = self.loc.get_unit_name(tile.builder_unit.unit_type) if tile.builder_unit else "Builder"
+        
+        military_button = {
+            'rect': pygame.Rect(screen_x - button_width - 5, screen_y - button_height - 30, button_width, button_height),
+            'text': military_unit_name,
+            'action': 'select_military_unit',
+            'color': (100, 120, 180),
+            'unit': tile.unit
+        }
+        
+        builder_button = {
+            'rect': pygame.Rect(screen_x + 5, screen_y - button_height - 30, button_width, button_height),
+            'text': builder_unit_name,
+            'action': 'select_builder_unit',
+            'color': (100, 180, 120),
+            'unit': tile.builder_unit
+        }
+        
+        self.unit_selection_buttons = [military_button, builder_button]
+    
+    def _draw_unit_selection_buttons(self, screen: pygame.Surface):
+        if not self.unit_selection_pending:
+            return
+        
+        for button in self.unit_selection_buttons:
+            rect = button['rect']
+            is_hovered = rect.collidepoint(self.mouse_pos)
+            
+            color = button['color']
+            if is_hovered:
+                color = (min(255, color[0] + 30), min(255, color[1] + 30), min(255, color[2] + 30))
+            
+            pygame.draw.rect(screen, color, rect)
+            border_color = (255, 255, 255) if is_hovered else (150, 150, 150)
+            pygame.draw.rect(screen, border_color, rect, 2)
+            
+            text = button['text']
+            try:
+                text_surface = self.ui.font_small.render(text, True, (255, 255, 255))
+            except Exception:
+                fallback_font = pygame.font.Font(None, 16)
+                text_surface = fallback_font.render(text, True, (255, 255, 255))
+            
+            text_rect = text_surface.get_rect(center=rect.center)
+            screen.blit(text_surface, text_rect)
+    
+    def _handle_unit_selection_click(self, mouse_pos: Tuple[int, int]) -> Optional[str]:
+        if not self.unit_selection_pending:
+            return None
+        
+        for button in self.unit_selection_buttons:
+            if button['rect'].collidepoint(mouse_pos):
+                return button['action']
+        
+        return None
+    
+    def _select_specific_unit(self, action: str):
+        if not self.unit_selection_tile:
+            return
+        
+        if action == 'select_military_unit' and self.unit_selection_tile.unit:
+            self.selected_unit = self.unit_selection_tile.unit
+            self.show_unit_range(self.unit_selection_tile.unit)
+        elif action == 'select_builder_unit' and self.unit_selection_tile.builder_unit:
+            self.selected_unit = self.unit_selection_tile.builder_unit
+            self.show_unit_range(self.unit_selection_tile.builder_unit)
+        
+        self.unit_selection_pending = False
+        self.unit_selection_buttons = []
     
     def move_unit(self, unit: Unit, target_tile: HexTile):
         source_tile = self.hex_map.get_tile(unit.tile_q, unit.tile_r)
@@ -614,6 +709,8 @@ class Game:
         )
         self.screen.blit(turn_indicator, (10, 10))
         
+        self._draw_unit_selection_buttons(self.screen)
+        
         self._draw_popups()
     
     def draw_building_icon(self, x: float, y: float, building: Building):
@@ -867,6 +964,16 @@ class Game:
                         settings_visible = self.settings_popup and self.settings_popup.visible
                         build_visible = self.build_popup and self.build_popup.visible
                         train_visible = self.train_popup and self.train_popup.visible
+                        
+                        if self.unit_selection_pending:
+                            unit_selection_action = self._handle_unit_selection_click(event.pos)
+                            if unit_selection_action:
+                                self._select_specific_unit(unit_selection_action)
+                            else:
+                                if not (settings_visible or build_visible or train_visible):
+                                    q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
+                                    self.handle_tile_click(q, r)
+                            continue
                         
                         popup_action = None
                         if settings_visible:
