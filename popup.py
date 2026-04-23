@@ -125,9 +125,9 @@ class BasePopup:
         draw_y = self.y + (self.height - draw_height) // 2
         
         shadow_rect = pygame.Rect(draw_x + 5, draw_y + 5, draw_width, draw_height)
-        shadow_color = (0, 0, 0, int(60 * alpha))
+        shadow_alpha = int(60 * alpha / 255 * 255) if alpha > 0 else 0
         shadow_surface = pygame.Surface((draw_width, draw_height), pygame.SRCALPHA)
-        pygame.draw.rect(shadow_surface, shadow_color, shadow_surface.get_rect(), border_radius=10)
+        shadow_surface.fill((0, 0, 0, shadow_alpha))
         screen.blit(shadow_surface, (draw_x + 5, draw_y + 5))
         
         popup_surface = pygame.Surface((draw_width, draw_height), pygame.SRCALPHA)
@@ -137,14 +137,14 @@ class BasePopup:
             UI_COLORS['menu_background'][2],
             alpha
         )
-        pygame.draw.rect(popup_surface, popup_color, popup_surface.get_rect(), border_radius=10)
+        popup_surface.fill(popup_color)
         border_color = (
             UI_COLORS['highlight_border'][0],
             UI_COLORS['highlight_border'][1],
             UI_COLORS['highlight_border'][2],
             alpha
         )
-        pygame.draw.rect(popup_surface, border_color, popup_surface.get_rect(), 3, border_radius=10)
+        pygame.draw.rect(popup_surface, border_color, popup_surface.get_rect(), 3)
         
         screen.blit(popup_surface, (draw_x, draw_y))
         
@@ -223,13 +223,12 @@ class BasePopup:
         )
         
         button_surface = pygame.Surface((draw_rect.width, draw_rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(button_surface, draw_color_with_alpha, 
-                        button_surface.get_rect(), border_radius=8)
+        button_surface.fill(draw_color_with_alpha)
         
         border_color = UI_COLORS['highlight_border'] if button.hovered else (60, 70, 80)
         border_width = 3 if button.hovered else 2
         pygame.draw.rect(button_surface, (*border_color, alpha), 
-                        button_surface.get_rect(), border_width, border_radius=8)
+                        button_surface.get_rect(), border_width)
         
         screen.blit(button_surface, draw_rect)
         
@@ -353,3 +352,62 @@ class BuildPopup(BasePopup):
                     can_afford = self.player.can_afford(cost)
                     button.enabled = can_afford
                     button.color = (80, 80, 150) if can_afford else (80, 80, 80)
+
+
+class TrainPopup(BasePopup):
+    def __init__(self, width: int, height: int, localization: Localization, 
+                 font_manager: FontManager, player):
+        self.player = player
+        from config import UNIT_INFO
+        self.UNIT_INFO = UNIT_INFO
+        super().__init__(width, height, localization.t('select_unit'), localization, font_manager)
+        
+        self._create_buttons()
+    
+    def _create_buttons(self):
+        button_width = 220
+        button_height = 45
+        center_x = (self.width - button_width) // 2
+        start_y = 80
+        
+        for unit_type, info in self.UNIT_INFO.items():
+            cost = info['cost']
+            can_afford = self.player.can_afford(cost)
+            
+            cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
+            unit_name = self.loc.get_unit_name(unit_type)
+            button_text = f"{unit_name} ({cost_str})"
+            
+            button_color = (80, 120, 80) if can_afford else (80, 80, 80)
+            
+            button = PopupButton(
+                pygame.Rect(center_x, start_y, button_width, button_height),
+                button_text,
+                f'train_{unit_type}',
+                color=button_color,
+                enabled=can_afford
+            )
+            self.buttons.append(button)
+            
+            start_y += button_height + 10
+        
+        start_y += 10
+        
+        close_button = PopupButton(
+            pygame.Rect(center_x, start_y, button_width, button_height),
+            self.loc.t('cancel'),
+            'close',
+            color=(120, 80, 80)
+        )
+        self.buttons.append(close_button)
+    
+    def update_player(self, player):
+        self.player = player
+        for button in self.buttons:
+            if button.action.startswith('train_'):
+                unit_type = button.action[6:]
+                if unit_type in self.UNIT_INFO:
+                    cost = self.UNIT_INFO[unit_type]['cost']
+                    can_afford = self.player.can_afford(cost)
+                    button.enabled = can_afford
+                    button.color = (80, 120, 80) if can_afford else (80, 80, 80)

@@ -15,7 +15,7 @@ from localization import Localization
 from animation import AnimationManager
 from menu import MainMenu, SettingsMenu
 from help_menu import HelpMenu
-from popup import SettingsPopup, BuildPopup
+from popup import SettingsPopup, BuildPopup, TrainPopup
 
 
 class Game:
@@ -60,6 +60,7 @@ class Game:
         
         self.settings_popup = None
         self.build_popup = None
+        self.train_popup = None
         self._popup_initialized = False
     
     def _init_popups(self):
@@ -77,6 +78,12 @@ class Game:
                 self.get_current_player()
             )
             self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
+            
+            self.train_popup = TrainPopup(
+                300, 280, self.loc, self.ui.get_font_manager(),
+                self.get_current_player()
+            )
+            self.train_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
         
         self._popup_initialized = True
     
@@ -93,6 +100,12 @@ class Game:
                     self.get_current_player()
                 )
                 self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
+                
+                self.train_popup = TrainPopup(
+                    300, 280, self.loc, self.ui.get_font_manager(),
+                    self.get_current_player()
+                )
+                self.train_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
     
     def set_language(self, language: str):
         self.loc.set_language(language)
@@ -319,6 +332,51 @@ class Game:
                 self.add_message(f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}")
         
         self.select_tile(target_tile)
+    
+    def train_unit(self, unit_type: str):
+        from config import UNIT_INFO
+        if not self.selected_tile:
+            return
+        
+        player = self.get_current_player()
+        if self.selected_tile.owner != player:
+            self.add_message(self._get_msg('msg_can_only_train_own'))
+            return
+        
+        if not self.selected_tile.building or self.selected_tile.building.building_type != 'barracks':
+            self.add_message(self._get_msg('msg_need_barracks'))
+            return
+        
+        if self.selected_tile.unit:
+            self.add_message(self._get_msg('msg_tile_has_unit'))
+            return
+        
+        if unit_type not in UNIT_INFO:
+            return
+        
+        cost = UNIT_INFO[unit_type]['cost']
+        if not player.can_afford(cost):
+            self.add_message(self._get_msg('msg_not_enough_resources'))
+            return
+        
+        if player.spend_resources(cost):
+            unit = Unit(unit_type, self.selected_tile.q, self.selected_tile.r, player)
+            self.selected_tile.unit = unit
+            player.add_unit(unit)
+            
+            name = self.loc.get_unit_name(unit_type)
+            self.add_message(f"{self._get_msg('msg_trained')} {name}")
+            
+            if self.train_popup:
+                self.train_popup.hide()
+            
+            if self.animation_manager:
+                x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
+                screen_x = x + self.map_offset_x
+                screen_y = y + self.map_offset_y
+                self.animation_manager.particle_system.emit(
+                    screen_x, screen_y, player.color, count=20, spread=80
+                )
     
     def build_structure(self, building_type: str):
         if not self.selected_tile:
@@ -557,6 +615,7 @@ class Game:
                     elif self.game_state == GAME_STATES['PLAYING']:
                         settings_visible = self.settings_popup and self.settings_popup.visible
                         build_visible = self.build_popup and self.build_popup.visible
+                        train_visible = self.train_popup and self.train_popup.visible
                         
                         popup_action = None
                         if settings_visible:
@@ -565,6 +624,9 @@ class Game:
                         elif build_visible:
                             self.build_popup.set_mouse_state(event.pos, True)
                             popup_action = self.build_popup.handle_click()
+                        elif train_visible:
+                            self.train_popup.set_mouse_state(event.pos, True)
+                            popup_action = self.train_popup.handle_click()
                         
                         if popup_action:
                             self._handle_popup_action(popup_action)
@@ -582,14 +644,21 @@ class Game:
                                         if self.players:
                                             self.build_popup.update_player(self.get_current_player())
                                         self.build_popup.show()
+                                elif action == 'open_train_popup':
+                                    if self.train_popup:
+                                        if self.players:
+                                            self.train_popup.update_player(self.get_current_player())
+                                        self.train_popup.show()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:
                                         self.settings_popup.hide()
                                     if self.build_popup:
                                         self.build_popup.hide()
+                                    if self.train_popup:
+                                        self.train_popup.hide()
                                     self.game_state = GAME_STATES['MENU']
                             else:
-                                if not (settings_visible or build_visible):
+                                if not (settings_visible or build_visible or train_visible):
                                     q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
                                     self.handle_tile_click(q, r)
                     
@@ -641,6 +710,7 @@ class Game:
         
         settings_visible = self.settings_popup and self.settings_popup.visible
         build_visible = self.build_popup and self.build_popup.visible
+        train_visible = self.train_popup and self.train_popup.visible
         
         if settings_visible:
             self.settings_popup.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
@@ -653,6 +723,13 @@ class Game:
                 self.build_popup.update_player(self.get_current_player())
             self.build_popup.update(dt)
             self.build_popup.draw(self.screen)
+        
+        elif train_visible:
+            self.train_popup.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
+            if self.players:
+                self.train_popup.update_player(self.get_current_player())
+            self.train_popup.update(dt)
+            self.train_popup.draw(self.screen)
     
     def _handle_popup_action(self, action: str):
         if action == 'close':
@@ -660,6 +737,8 @@ class Game:
                 self.settings_popup.hide()
             if self.build_popup and self.build_popup.visible:
                 self.build_popup.hide()
+            if self.train_popup and self.train_popup.visible:
+                self.train_popup.hide()
         
         elif action == 'set_language_en':
             self.set_language('en')
@@ -685,6 +764,10 @@ class Game:
             self.build_structure(building_type)
             if self.build_popup:
                 self.build_popup.hide()
+        
+        elif action.startswith('train_'):
+            unit_type = action[6:]
+            self.train_unit(unit_type)
     
     def _handle_menu_action(self, action: str):
         if action == 'start_game':
