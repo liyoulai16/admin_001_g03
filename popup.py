@@ -22,12 +22,9 @@ class PopupButton:
         
     def update(self, mouse_pos: Tuple[int, int], mouse_down: bool, dt: float):
         if self.target_visible:
-            self.anim_progress = min(self.anim_progress + dt * 8.0, 1.0)
+            self.anim_progress = min(self.anim_progress + dt * 25.0, 1.0)
         else:
-            self.anim_progress = max(self.anim_progress - dt * 10.0, 0.0)
-        
-        if self.anim_progress < 0.5:
-            return
+            self.anim_progress = max(self.anim_progress - dt * 20.0, 0.0)
         
         self.hovered = self.enabled and self.rect.collidepoint(mouse_pos)
         
@@ -69,16 +66,16 @@ class BasePopup:
         
     def update(self, dt: float):
         if self.visible:
-            self.anim_progress = min(self.anim_progress + dt * 6.0, 1.0)
+            self.anim_progress = min(self.anim_progress + dt * 20.0, 1.0)
         else:
-            self.anim_progress = max(self.anim_progress - dt * 8.0, 0.0)
+            self.anim_progress = max(self.anim_progress - dt * 15.0, 0.0)
         
         for button in self.buttons:
             button.update(self.mouse_pos, self.mouse_down, dt)
     
     def show(self):
         self.visible = True
-        self.anim_progress = max(self.anim_progress, 0.01)
+        self.anim_progress = max(self.anim_progress, 0.1)
         self.result = None
     
     def hide(self):
@@ -90,12 +87,18 @@ class BasePopup:
         self.mouse_down = mouse_down
     
     def handle_click(self) -> Optional[str]:
-        if not self.visible or self.anim_progress < 0.5:
+        if not self.visible or self.anim_progress < 0.1:
             return None
         
         if self.mouse_was_down and not self.mouse_down:
             for button in self.buttons:
-                if button.enabled and button.hovered:
+                button_screen_rect = pygame.Rect(
+                    button.rect.x + self.x,
+                    button.rect.y + self.y,
+                    button.rect.width,
+                    button.rect.height
+                )
+                if button.enabled and button_screen_rect.collidepoint(self.mouse_pos):
                     return button.action
             
             if not self._is_point_in_popup(self.mouse_pos):
@@ -148,12 +151,12 @@ class BasePopup:
         
         screen.blit(popup_surface, (draw_x, draw_y))
         
-        if eased_progress > 0.7:
-            title_alpha = int(255 * min(1, (eased_progress - 0.7) * 5))
+        if eased_progress > 0.1:
+            title_alpha = int(255 * min(1, (eased_progress - 0.1) * 3))
             self._draw_title(screen, draw_x, draw_y, draw_width, title_alpha)
             
             for button in self.buttons:
-                if button.anim_progress > 0.3:
+                if button.anim_progress > 0.05:
                     self._draw_popup_button(screen, button, draw_x, draw_y)
     
     def _draw_title(self, screen: pygame.Surface, x: int, y: int, width: int, alpha: int):
