@@ -125,7 +125,7 @@ class BasePopup:
         draw_y = self.y + (self.height - draw_height) // 2
         
         shadow_rect = pygame.Rect(draw_x + 5, draw_y + 5, draw_width, draw_height)
-        shadow_alpha = int(60 * alpha / 255 * 255) if alpha > 0 else 0
+        shadow_alpha = int(60 * eased_progress)
         shadow_surface = pygame.Surface((draw_width, draw_height), pygame.SRCALPHA)
         shadow_surface.fill((0, 0, 0, shadow_alpha))
         screen.blit(shadow_surface, (draw_x + 5, draw_y + 5))
