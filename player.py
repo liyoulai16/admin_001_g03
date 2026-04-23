@@ -140,8 +140,14 @@ class Unit:
         if distance > self.movement:
             return False
         
-        if target_tile.unit:
-            return False
+        if self.can_build:
+            if target_tile.builder_unit:
+                return False
+        else:
+            if target_tile.unit and target_tile.unit.owner == self.owner:
+                return False
+            if target_tile.unit and target_tile.unit.owner != self.owner:
+                return False
         
         return True
     
@@ -160,13 +166,19 @@ class Unit:
         if target_tile.unit and target_tile.unit.owner == self.owner:
             return False
         
+        if target_tile.builder_unit and target_tile.builder_unit.owner == self.owner:
+            return False
+        
         if target_tile.building and target_tile.building.owner == self.owner:
             return False
         
-        if not target_tile.unit and not target_tile.building and target_tile.owner != self.owner:
+        if not target_tile.unit and not target_tile.builder_unit and not target_tile.building and target_tile.owner != self.owner:
             return True
         
         if target_tile.unit and target_tile.unit.owner != self.owner:
+            return True
+        
+        if target_tile.builder_unit and target_tile.builder_unit.owner != self.owner:
             return True
         
         if target_tile.building and target_tile.building.owner != self.owner:
