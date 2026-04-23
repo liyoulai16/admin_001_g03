@@ -77,6 +77,10 @@ class BasePopup:
             button.update(local_mouse_pos, self.mouse_down, dt)
     
     def show(self):
+        if self.visible:
+            self.hide()
+            return
+        
         self.visible = True
         self.anim_progress = 1.0
         for button in self.buttons:
@@ -86,6 +90,7 @@ class BasePopup:
     
     def hide(self):
         self.visible = False
+        self._just_opened = False
     
     def set_mouse_state(self, mouse_pos: Tuple[int, int], mouse_down: bool):
         self.mouse_was_down = self.mouse_down
