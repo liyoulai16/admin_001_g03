@@ -11,6 +11,7 @@ class HexTile:
         self.owner = None
         self.building = None
         self.unit = None
+        self.builder_unit = None
         self.selected = False
         self.highlighted = False
         self.reachable = False

@@ -1,5 +1,6 @@
 import pygame
 import sys
+import math
 from typing import Dict, Tuple, Optional, List
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS, BACKGROUND_COLOR, 
@@ -206,6 +207,9 @@ class Game:
         if tile.unit and tile.unit.owner == self.get_current_player():
             self.selected_unit = tile.unit
             self.show_unit_range(tile.unit)
+        elif tile.builder_unit and tile.builder_unit.owner == self.get_current_player():
+            self.selected_unit = tile.builder_unit
+            self.show_unit_range(tile.builder_unit)
     
     def show_unit_range(self, unit: Unit):
         if not unit.moved_this_turn:
@@ -239,10 +243,19 @@ class Game:
             self.animation_manager.add_unit_move(unit_id, (start_screen_x, start_screen_y), 
                                                     (end_screen_x, end_screen_y))
         
-        source_tile.unit = None
+        if unit.can_build:
+            source_tile.builder_unit = None
+        else:
+            source_tile.unit = None
+        
         unit.tile_q = target_tile.q
         unit.tile_r = target_tile.r
-        target_tile.unit = unit
+        
+        if unit.can_build:
+            target_tile.builder_unit = unit
+        else:
+            target_tile.unit = unit
+        
         unit.moved_this_turn = True
         
         old_owner = target_tile.owner
@@ -286,8 +299,18 @@ class Game:
             self.animation_manager.add_unit_attack(unit_id, (start_screen_x, start_screen_y),
                                                       (target_screen_x, target_screen_y))
         
+        target_unit = None
+        is_builder_target = False
+        
         if target_tile.unit and target_tile.unit.owner != unit.owner:
-            target = target_tile.unit
+            target_unit = target_tile.unit
+            is_builder_target = False
+        elif target_tile.builder_unit and target_tile.builder_unit.owner != unit.owner:
+            target_unit = target_tile.builder_unit
+            is_builder_target = True
+        
+        if target_unit:
+            target = target_unit
             target_name = self.loc.get_unit_name(target.unit_type)
             damage = max(1, unit.attack - target.defense // 2)
             target.health -= damage
@@ -296,7 +319,10 @@ class Game:
             
             if target.health <= 0:
                 target.owner.remove_unit(target)
-                target_tile.unit = None
+                if is_builder_target:
+                    target_tile.builder_unit = None
+                else:
+                    target_tile.unit = None
                 msg += f", {target_name} {self._get_msg('msg_destroyed')}"
                 
                 if self.animation_manager:
@@ -357,9 +383,17 @@ class Game:
             self.add_message(self._get_msg('msg_cannot_train_this_unit'))
             return
         
-        if self.selected_tile.unit:
-            self.add_message(self._get_msg('msg_tile_has_unit'))
-            return
+        unit_info = UNIT_INFO.get(unit_type, {})
+        is_builder = unit_info.get('can_build', False)
+        
+        if is_builder:
+            if self.selected_tile.builder_unit:
+                self.add_message(self._get_msg('msg_tile_has_builder'))
+                return
+        else:
+            if self.selected_tile.unit:
+                self.add_message(self._get_msg('msg_tile_has_unit'))
+                return
         
         if unit_type not in UNIT_INFO:
             return
@@ -371,7 +405,12 @@ class Game:
         
         if player.spend_resources(cost):
             unit = Unit(unit_type, self.selected_tile.q, self.selected_tile.r, player)
-            self.selected_tile.unit = unit
+            
+            if unit.can_build:
+                self.selected_tile.builder_unit = unit
+            else:
+                self.selected_tile.unit = unit
+            
             player.add_unit(unit)
             
             name = self.loc.get_unit_name(unit_type)
@@ -547,9 +586,17 @@ class Game:
                     unit_id = id(tile.unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self.draw_unit_icon(anim_pos[0], anim_pos[1], tile.unit)
+                        self.draw_unit_icon(anim_pos[0], anim_pos[1] + 5, tile.unit)
                     else:
-                        self.draw_unit_icon(screen_x, screen_y, tile.unit)
+                        self.draw_unit_icon(screen_x, screen_y + 5, tile.unit)
+                
+                if tile.builder_unit:
+                    unit_id = id(tile.builder_unit)
+                    if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
+                        anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
+                        self.draw_unit_icon(anim_pos[0] - 6, anim_pos[1] - 5, tile.builder_unit)
+                    else:
+                        self.draw_unit_icon(screen_x - 6, screen_y - 5, tile.builder_unit)
         
         if self.animation_manager:
             self.animation_manager.particle_system.draw(self.screen)

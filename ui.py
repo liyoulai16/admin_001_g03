@@ -162,12 +162,25 @@ class UI:
                     button_y += button_height + 10
             
             if selected_tile.building:
-                from config import BUILDING_INFO
+                from config import BUILDING_INFO, UNIT_INFO
                 building_type = selected_tile.building.building_type
                 building_info = BUILDING_INFO.get(building_type, {})
                 can_train = building_info.get('can_train', [])
                 
-                if can_train and not selected_tile.unit:
+                can_train_now = False
+                for unit_type in can_train:
+                    unit_info = UNIT_INFO.get(unit_type, {})
+                    is_builder = unit_info.get('can_build', False)
+                    if is_builder:
+                        if not selected_tile.builder_unit:
+                            can_train_now = True
+                            break
+                    else:
+                        if not selected_tile.unit:
+                            can_train_now = True
+                            break
+                
+                if can_train and can_train_now:
                     train_button = {
                         'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
                         'text': self.loc.t('train'),
@@ -181,7 +194,17 @@ class UI:
             if selected_tile.unit:
                 move_text = self.loc.t('moved') if selected_tile.unit.moved_this_turn else self.loc.t('can_move')
                 attack_text = self.loc.t('attacked') if selected_tile.unit.attacked_this_turn else self.loc.t('can_attack')
-                info_text = f"{self.loc.t('status')}: {move_text}, {attack_text}"
+                unit_name = self.loc.get_unit_name(selected_tile.unit.unit_type)
+                info_text = f"{unit_name}: {move_text}, {attack_text}"
+                info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
+                screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
+                button_y += 20
+            
+            if selected_tile.builder_unit:
+                move_text = self.loc.t('moved') if selected_tile.builder_unit.moved_this_turn else self.loc.t('can_move')
+                attack_text = self.loc.t('attacked') if selected_tile.builder_unit.attacked_this_turn else self.loc.t('can_attack')
+                unit_name = self.loc.get_unit_name(selected_tile.builder_unit.unit_type)
+                info_text = f"{unit_name}: {move_text}, {attack_text}"
                 info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
                 screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
         
