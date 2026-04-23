@@ -163,13 +163,10 @@ class BasePopup:
     
     def _draw_popup_button(self, screen: pygame.Surface, button: PopupButton, 
                           popup_x: int, popup_y: int):
-        if not button.enabled:
-            return
-        
         scale = 1.0
-        if button.pressed:
+        if button.enabled and button.pressed:
             scale = 0.95
-        elif button.hovered:
+        elif button.enabled and button.hovered:
             scale = 1.02
         
         rect = button.rect
@@ -192,31 +189,42 @@ class BasePopup:
         draw_rect.y += popup_y
         
         base_color = button.color
-        if button.hovered:
+        if button.enabled and button.hovered:
             draw_color = (
                 min(255, base_color[0] + 20),
                 min(255, base_color[1] + 20),
                 min(255, base_color[2] + 20)
             )
+        elif not button.enabled:
+            draw_color = (60, 60, 60)
         else:
             draw_color = base_color
         
         button_surface = pygame.Surface((draw_rect.width, draw_rect.height))
         button_surface.fill(draw_color)
         
-        border_color = UI_COLORS['highlight_border'] if button.hovered else (60, 70, 80)
-        border_width = 3 if button.hovered else 2
+        if button.enabled and button.hovered:
+            border_color = UI_COLORS['highlight_border']
+            border_width = 3
+        elif not button.enabled:
+            border_color = (80, 80, 80)
+            border_width = 2
+        else:
+            border_color = (60, 70, 80)
+            border_width = 2
+        
         pygame.draw.rect(button_surface, border_color, 
                         button_surface.get_rect(), border_width)
         
         screen.blit(button_surface, draw_rect)
         
         text_font = self.font_manager.get_font(22, self.loc.get_language())
+        text_color = (120, 120, 120) if not button.enabled else UI_COLORS['menu_text']
         try:
-            text_surface = text_font.render(button.text, True, UI_COLORS['menu_text'])
+            text_surface = text_font.render(button.text, True, text_color)
         except Exception:
             fallback_font = pygame.font.Font(None, 22)
-            text_surface = fallback_font.render(button.text, True, UI_COLORS['menu_text'])
+            text_surface = fallback_font.render(button.text, True, text_color)
         
         text_rect = text_surface.get_rect(center=draw_rect.center)
         screen.blit(text_surface, text_rect)

@@ -160,6 +160,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
     },
     'zh': {
         'game_title': '回合制策略游戏 - 六边形地图',
+        'game_subtitle': '六边形策略游戏',
         
         'turn': '回合',
         'current_player': '当前',
