@@ -531,7 +531,7 @@ class Game:
             self.add_message(self._get_msg('msg_can_only_build_own'))
             return
         
-        if not self.selected_tile.unit or not self.selected_tile.unit.can_build:
+        if not self.selected_tile.builder_unit or not self.selected_tile.builder_unit.can_build:
             self.add_message(self._get_msg('msg_need_builder'))
             return
         

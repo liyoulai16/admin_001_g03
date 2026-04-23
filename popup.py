@@ -54,6 +54,7 @@ class BasePopup:
         self.mouse_was_down = False
         
         self.result = None
+        self._just_opened = False
         
     def update_position(self, screen_width: int, screen_height: int):
         self.screen_width = screen_width
@@ -67,6 +68,9 @@ class BasePopup:
         else:
             self.anim_progress = max(self.anim_progress - dt * 15.0, 0.0)
         
+        if self._just_opened and self.mouse_was_down and not self.mouse_down:
+            self._just_opened = False
+        
         local_mouse_pos = (self.mouse_pos[0] - self.x, self.mouse_pos[1] - self.y)
         
         for button in self.buttons:
@@ -78,6 +82,7 @@ class BasePopup:
         for button in self.buttons:
             button.anim_progress = 1.0
         self.result = None
+        self._just_opened = True
     
     def hide(self):
         self.visible = False
@@ -103,7 +108,7 @@ class BasePopup:
                     return button.action
         
         if self.mouse_was_down and not self.mouse_down:
-            if not self._is_point_in_popup(self.mouse_pos):
+            if not self._just_opened and not self._is_point_in_popup(self.mouse_pos):
                 return 'close'
         
         return None
