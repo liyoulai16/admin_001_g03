@@ -149,7 +149,7 @@ class UI:
         button_y += button_height + 10
         
         if selected_tile and selected_tile.owner == current_player:
-            if selected_tile.unit and selected_tile.unit.can_build:
+            if selected_tile.builder_unit and selected_tile.builder_unit.can_build:
                 if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
                     build_button = {
                         'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
