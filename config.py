@@ -36,30 +36,35 @@ BUILDING_INFO = {
         'cost': {'gold': 100, 'wood': 50},
         'production': {'gold': 10, 'wood': 0, 'food': 5},
         'description': 'Produces gold and food per turn',
+        'can_train': ['builder'],
     },
     'barracks': {
         'name': 'Barracks',
         'cost': {'gold': 80, 'wood': 60},
         'production': {'gold': 0, 'wood': 0, 'food': 0},
-        'description': 'Allows training units',
+        'description': 'Allows training military units',
+        'can_train': ['warrior', 'archer'],
     },
     'farm': {
         'name': 'Farm',
         'cost': {'gold': 50, 'wood': 30},
         'production': {'gold': 0, 'wood': 0, 'food': 10},
         'description': 'Produces food per turn',
+        'can_train': [],
     },
     'tower': {
         'name': 'Tower',
         'cost': {'gold': 60, 'wood': 40},
         'production': {'gold': 0, 'wood': 0, 'food': 0},
         'description': 'Provides defense bonus',
+        'can_train': [],
     },
     'lumbermill': {
         'name': 'Lumbermill',
         'cost': {'gold': 40, 'wood': 20},
         'production': {'gold': 0, 'wood': 8, 'food': 0},
         'description': 'Produces wood per turn',
+        'can_train': [],
     },
 }
 
@@ -71,6 +76,7 @@ UNIT_INFO = {
         'defense': 8,
         'health': 100,
         'movement': 2,
+        'can_build': False,
     },
     'archer': {
         'name': 'Archer',
@@ -79,6 +85,16 @@ UNIT_INFO = {
         'defense': 5,
         'health': 70,
         'movement': 3,
+        'can_build': False,
+    },
+    'builder': {
+        'name': 'Builder',
+        'cost': {'gold': 20, 'wood': 15, 'food': 10},
+        'attack': 2,
+        'defense': 3,
+        'health': 50,
+        'movement': 2,
+        'can_build': True,
     },
 }
 
