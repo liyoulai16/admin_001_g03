@@ -111,6 +111,7 @@ class Unit:
             self.health = info['health']
             self.max_health = info['health']
             self.movement = info['movement']
+            self.can_build = info.get('can_build', False)
         else:
             self.name = unit_type
             self.attack = 10
@@ -118,6 +119,7 @@ class Unit:
             self.health = 100
             self.max_health = 100
             self.movement = 2
+            self.can_build = False
     
     def reset_for_new_turn(self):
         self.moved_this_turn = False
@@ -138,7 +140,7 @@ class Unit:
         if distance > self.movement:
             return False
         
-        if target_tile.unit and target_tile.unit.owner != self.owner:
+        if target_tile.unit:
             return False
         
         return True

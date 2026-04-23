@@ -29,6 +29,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'warrior': 'Warrior',
         'archer': 'Archer',
+        'builder': 'Builder',
         
         'tile_info': 'Tile Info',
         'no_tile_selected': 'No tile selected',
@@ -64,8 +65,11 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_not_enough_resources': 'Not enough resources!',
         'msg_built': 'Built',
         'msg_trained': 'Trained',
-        'msg_can_only_train_own': 'Can only train units in your own barracks!',
-        'msg_need_barracks': 'Need a barracks to train units!',
+        'msg_can_only_train_own': 'Can only train units in your own buildings!',
+        'msg_need_barracks': 'Need a barracks to train military units!',
+        'msg_need_training_building': 'Need a building that can train units!',
+        'msg_cannot_train_this_unit': 'This building cannot train this type of unit!',
+        'msg_need_builder': 'Need a builder unit to construct buildings!',
         'msg_tile_has_unit': 'Tile already has a unit!',
         'msg_ai_turn': 'AI Turn',
         'msg_new_turn_gained': 'New turn! Gained:',
@@ -186,6 +190,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'warrior': '战士',
         'archer': '弓箭手',
+        'builder': '建造者',
         
         'tile_info': '地块信息',
         'no_tile_selected': '未选中地块',
@@ -221,8 +226,11 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_not_enough_resources': '资源不足！',
         'msg_built': '建造了',
         'msg_trained': '训练了',
-        'msg_can_only_train_own': '只能在自己的军营训练单位！',
-        'msg_need_barracks': '需要军营才能训练单位！',
+        'msg_can_only_train_own': '只能在自己的建筑中训练单位！',
+        'msg_need_barracks': '需要军营才能训练军事单位！',
+        'msg_need_training_building': '需要可以训练单位的建筑！',
+        'msg_cannot_train_this_unit': '该建筑无法训练此类型的单位！',
+        'msg_need_builder': '需要建造者单位才能建造建筑！',
         'msg_tile_has_unit': '该地块已有单位！',
         'msg_ai_turn': 'AI 回合',
         'msg_new_turn_gained': '新回合！获得资源:',

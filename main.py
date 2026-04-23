@@ -336,7 +336,7 @@ class Game:
         self.select_tile(target_tile)
     
     def train_unit(self, unit_type: str):
-        from config import UNIT_INFO
+        from config import UNIT_INFO, BUILDING_INFO
         if not self.selected_tile:
             return
         
@@ -345,8 +345,16 @@ class Game:
             self.add_message(self._get_msg('msg_can_only_train_own'))
             return
         
-        if not self.selected_tile.building or self.selected_tile.building.building_type != 'barracks':
-            self.add_message(self._get_msg('msg_need_barracks'))
+        if not self.selected_tile.building:
+            self.add_message(self._get_msg('msg_need_training_building'))
+            return
+        
+        building_type = self.selected_tile.building.building_type
+        building_info = BUILDING_INFO.get(building_type, {})
+        can_train = building_info.get('can_train', [])
+        
+        if unit_type not in can_train:
+            self.add_message(self._get_msg('msg_cannot_train_this_unit'))
             return
         
         if self.selected_tile.unit:
@@ -387,6 +395,10 @@ class Game:
         player = self.get_current_player()
         if self.selected_tile.owner != player:
             self.add_message(self._get_msg('msg_can_only_build_own'))
+            return
+        
+        if not self.selected_tile.unit or not self.selected_tile.unit.can_build:
+            self.add_message(self._get_msg('msg_need_builder'))
             return
         
         if self.selected_tile.building:
@@ -559,24 +571,214 @@ class Game:
     
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
-        icon_size = 16
+        building_type = building.building_type
         
+        if building_type == 'town':
+            self._draw_town_icon(x, y, color)
+        elif building_type == 'barracks':
+            self._draw_barracks_icon(x, y, color)
+        elif building_type == 'farm':
+            self._draw_farm_icon(x, y, color)
+        elif building_type == 'tower':
+            self._draw_tower_icon(x, y, color)
+        elif building_type == 'lumbermill':
+            self._draw_lumbermill_icon(x, y, color)
+        else:
+            self._draw_default_building_icon(x, y, color)
+    
+    def _draw_town_icon(self, x: float, y: float, color: tuple):
+        base_y = y - 5
+        base_width = 20
+        base_height = 12
+        roof_height = 8
+        
+        base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2 + roof_height, base_width, base_height)
+        pygame.draw.rect(self.screen, color, base_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        
+        roof_points = [
+            (x, base_y - base_height//2 - roof_height + 2),
+            (x - base_width//2 - 2, base_y - base_height//2 + roof_height),
+            (x + base_width//2 + 2, base_y - base_height//2 + roof_height)
+        ]
+        pygame.draw.polygon(self.screen, (200, 100, 80), roof_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+        
+        door_rect = pygame.Rect(x - 3, base_y - base_height//2 + roof_height + 5, 6, 7)
+        pygame.draw.rect(self.screen, (100, 60, 40), door_rect)
+    
+    def _draw_barracks_icon(self, x: float, y: float, color: tuple):
+        base_y = y - 5
+        base_width = 18
+        base_height = 14
+        
+        base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
+        pygame.draw.rect(self.screen, color, base_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        
+        flag_x = x
+        flag_top_y = base_y - base_height//2 - 6
+        pygame.draw.line(self.screen, (80, 60, 40), (flag_x, base_y - base_height//2), (flag_x, flag_top_y), 2)
+        
+        flag_points = [
+            (flag_x, flag_top_y),
+            (flag_x + 8, flag_top_y + 4),
+            (flag_x, flag_top_y + 8)
+        ]
+        pygame.draw.polygon(self.screen, (200, 50, 50), flag_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
+        
+        window_rect = pygame.Rect(x - 5, base_y - 3, 4, 4)
+        pygame.draw.rect(self.screen, (255, 255, 200), window_rect)
+        window_rect2 = pygame.Rect(x + 1, base_y - 3, 4, 4)
+        pygame.draw.rect(self.screen, (255, 255, 200), window_rect2)
+    
+    def _draw_farm_icon(self, x: float, y: float, color: tuple):
+        base_y = y - 5
+        field_width = 18
+        field_height = 8
+        
+        field_rect = pygame.Rect(x - field_width//2, base_y, field_width, field_height)
+        pygame.draw.rect(self.screen, (80, 140, 60), field_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), field_rect, 1)
+        
+        for i in range(3):
+            plant_x = x - 5 + i * 5
+            plant_y = base_y - 2
+            pygame.draw.line(self.screen, (50, 100, 30), (plant_x, plant_y + 2), (plant_x, plant_y - 3), 1)
+            pygame.draw.circle(self.screen, (255, 220, 50), (int(plant_x), int(plant_y - 4)), 2)
+        
+        pygame.draw.rect(self.screen, color, (x - 3, base_y - 8, 6, 6))
+        pygame.draw.rect(self.screen, (255, 255, 255), (x - 3, base_y - 8, 6, 6), 1)
+    
+    def _draw_tower_icon(self, x: float, y: float, color: tuple):
+        base_y = y - 5
+        base_width = 12
+        base_height = 16
+        
+        base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
+        pygame.draw.rect(self.screen, (120, 120, 120), base_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        
+        top_width = 16
+        top_height = 4
+        top_rect = pygame.Rect(x - top_width//2, base_y - base_height//2 - top_height, top_width, top_height)
+        pygame.draw.rect(self.screen, color, top_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), top_rect, 1)
+        
+        for i in range(3):
+            notch_x = x - top_width//2 + i * 8
+            notch_rect = pygame.Rect(notch_x, base_y - base_height//2 - top_height - 3, 4, 3)
+            pygame.draw.rect(self.screen, color, notch_rect)
+        
+        window_rect = pygame.Rect(x - 2, base_y - 2, 4, 6)
+        pygame.draw.rect(self.screen, (80, 80, 150), window_rect)
+    
+    def _draw_lumbermill_icon(self, x: float, y: float, color: tuple):
+        base_y = y - 5
+        base_width = 16
+        base_height = 10
+        
+        base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
+        pygame.draw.rect(self.screen, (139, 90, 43), base_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        
+        roof_points = [
+            (x, base_y - base_height//2 - 6),
+            (x - base_width//2 - 2, base_y - base_height//2),
+            (x + base_width//2 + 2, base_y - base_height//2)
+        ]
+        pygame.draw.polygon(self.screen, (80, 50, 30), roof_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+        
+        log_y = base_y + base_height//2 + 2
+        pygame.draw.ellipse(self.screen, (101, 67, 33), (x - 8, log_y, 16, 4))
+        pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8, log_y, 16, 4), 1)
+        
+        pygame.draw.rect(self.screen, color, (x - 2, base_y - 3, 4, 4))
+    
+    def _draw_default_building_icon(self, x: float, y: float, color: tuple):
+        icon_size = 16
         icon_rect = pygame.Rect(x - icon_size//2, y - icon_size//2 - 5, icon_size, icon_size)
         pygame.draw.rect(self.screen, color, icon_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), icon_rect, 1)
         
-        text = self.ui.font_small.render("B", True, (255, 255, 255))
+        text = self.ui.font_small.render("?", True, (255, 255, 255))
         text_rect = text.get_rect(center=icon_rect.center)
         self.screen.blit(text, text_rect)
     
     def draw_unit_icon(self, x: float, y: float, unit: Unit):
         color = unit.owner.color
-        icon_size = 14
+        unit_type = unit.unit_type
         
-        icon_rect = pygame.Rect(x - icon_size//2, y + 8, icon_size, icon_size)
+        if unit_type == 'warrior':
+            self._draw_warrior_icon(x, y, color, unit)
+        elif unit_type == 'archer':
+            self._draw_archer_icon(x, y, color, unit)
+        elif unit_type == 'builder':
+            self._draw_builder_icon(x, y, color, unit)
+        else:
+            self._draw_default_unit_icon(x, y, color, unit)
+    
+    def _draw_warrior_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        base_y = y + 12
+        
+        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        
+        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
+        pygame.draw.rect(self.screen, color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        sword_x = x + 6
+        pygame.draw.line(self.screen, (200, 200, 200), (sword_x, base_y - 2), (sword_x, base_y + 6), 2)
+        pygame.draw.line(self.screen, (180, 140, 80), (sword_x - 2, base_y - 2), (sword_x + 2, base_y - 2), 3)
+        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_archer_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        base_y = y + 12
+        
+        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        
+        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
+        pygame.draw.rect(self.screen, color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        bow_x = x + 7
+        pygame.draw.arc(self.screen, (139, 90, 43), (bow_x - 4, base_y - 6, 8, 14), -math.pi/2, math.pi/2, 2)
+        pygame.draw.line(self.screen, (200, 200, 200), (bow_x, base_y - 6), (bow_x, base_y + 8), 1)
+        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_builder_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        base_y = y + 12
+        
+        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        
+        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
+        pygame.draw.rect(self.screen, color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        hammer_x = x + 6
+        pygame.draw.line(self.screen, (139, 90, 43), (hammer_x, base_y - 4), (hammer_x, base_y + 6), 2)
+        pygame.draw.rect(self.screen, (150, 150, 150), (hammer_x - 3, base_y - 6, 6, 4))
+        
+        if unit.can_build:
+            pygame.draw.circle(self.screen, (100, 255, 100), (int(x + 8), int(base_y - 6)), 3)
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(x + 8), int(base_y - 6)), 3, 1)
+        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_default_unit_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        icon_size = 14
         pygame.draw.circle(self.screen, color, (int(x), int(y + 15)), icon_size//2)
         pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y + 15)), icon_size//2, 1)
-        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_health_bar(self, x: float, y: float, unit: Unit):
         hp_percent = unit.health / unit.max_health
         hp_bar_width = 18
         hp_bar_height = 3
@@ -650,6 +852,8 @@ class Game:
                                     if self.train_popup:
                                         if self.players:
                                             self.train_popup.update_player(self.get_current_player())
+                                        if self.selected_tile:
+                                            self.train_popup.set_selected_tile(self.selected_tile)
                                         self.train_popup.show()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:

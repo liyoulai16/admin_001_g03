@@ -149,19 +149,25 @@ class UI:
         button_y += button_height + 10
         
         if selected_tile and selected_tile.owner == current_player:
-            if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
-                build_button = {
-                    'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-                    'text': self.loc.t('build'),
-                    'action': 'open_build_popup',
-                    'color': (100, 100, 180)
-                }
-                self.buttons.append(build_button)
-                self._draw_button(screen, build_button)
-                button_y += button_height + 10
+            if selected_tile.unit and selected_tile.unit.can_build:
+                if not selected_tile.building and selected_tile.terrain not in ['mountain', 'water']:
+                    build_button = {
+                        'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                        'text': self.loc.t('build'),
+                        'action': 'open_build_popup',
+                        'color': (100, 100, 180)
+                    }
+                    self.buttons.append(build_button)
+                    self._draw_button(screen, build_button)
+                    button_y += button_height + 10
             
-            if selected_tile.building and selected_tile.building.building_type == 'barracks':
-                if not selected_tile.unit:
+            if selected_tile.building:
+                from config import BUILDING_INFO
+                building_type = selected_tile.building.building_type
+                building_info = BUILDING_INFO.get(building_type, {})
+                can_train = building_info.get('can_train', [])
+                
+                if can_train and not selected_tile.unit:
                     train_button = {
                         'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
                         'text': self.loc.t('train'),

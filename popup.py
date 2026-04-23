@@ -344,11 +344,25 @@ class TrainPopup(BasePopup):
     def __init__(self, width: int, height: int, localization: Localization, 
                  font_manager: FontManager, player):
         self.player = player
-        from config import UNIT_INFO
+        from config import UNIT_INFO, BUILDING_INFO
         self.UNIT_INFO = UNIT_INFO
+        self.BUILDING_INFO = BUILDING_INFO
+        self.selected_tile = None
         super().__init__(width, height, localization.t('select_unit'), localization, font_manager)
         
         self._create_buttons()
+    
+    def set_selected_tile(self, tile):
+        self.selected_tile = tile
+        self._update_buttons()
+    
+    def _get_trainable_units(self):
+        if not self.selected_tile or not self.selected_tile.building:
+            return []
+        
+        building_type = self.selected_tile.building.building_type
+        building_info = self.BUILDING_INFO.get(building_type, {})
+        return building_info.get('can_train', [])
     
     def _create_buttons(self):
         button_width = 220
@@ -356,7 +370,13 @@ class TrainPopup(BasePopup):
         center_x = (self.width - button_width) // 2
         start_y = 80
         
-        for unit_type, info in self.UNIT_INFO.items():
+        trainable_units = self._get_trainable_units()
+        
+        for unit_type in trainable_units:
+            if unit_type not in self.UNIT_INFO:
+                continue
+            
+            info = self.UNIT_INFO[unit_type]
             cost = info['cost']
             can_afford = self.player.can_afford(cost)
             
@@ -386,6 +406,10 @@ class TrainPopup(BasePopup):
             color=(120, 80, 80)
         )
         self.buttons.append(close_button)
+    
+    def _update_buttons(self):
+        self.buttons = []
+        self._create_buttons()
     
     def update_player(self, player):
         self.player = player
