@@ -25,9 +25,15 @@ class MenuButton:
         self.animation.update(is_hovered, mouse_down, dt)
     
     def draw(self, screen: pygame.Surface, font: pygame.font.Font):
-        scale = self.animation.scale
-        color_offset = self.animation.color_offset
-        border_width = self.animation.border_width
+        is_hovered = self.animation.hover_progress > 0.0
+        is_clicked = self.animation.click_progress > 0.0
+        
+        if is_clicked:
+            scale = 0.90
+        elif is_hovered:
+            scale = 1.05
+        else:
+            scale = 1.0
         
         if scale != 1.0:
             center_x = self.rect.centerx
@@ -44,26 +50,25 @@ class MenuButton:
             draw_rect = self.rect.copy()
         
         base_color = self.color
-        if color_offset != 0:
+        if is_clicked:
             draw_color = (
-                max(0, min(255, base_color[0] + color_offset)),
-                max(0, min(255, base_color[1] + color_offset)),
-                max(0, min(255, base_color[2] + color_offset))
+                max(0, base_color[0] - 40),
+                max(0, base_color[1] - 40),
+                max(0, base_color[2] - 40)
+            )
+        elif is_hovered:
+            draw_color = (
+                min(255, base_color[0] + 20),
+                min(255, base_color[1] + 20),
+                min(255, base_color[2] + 20)
             )
         else:
-            if self.animation.hover_progress > 0:
-                draw_color = (
-                    min(255, base_color[0] + int(20 * self.animation.hover_progress)),
-                    min(255, base_color[1] + int(20 * self.animation.hover_progress)),
-                    min(255, base_color[2] + int(20 * self.animation.hover_progress))
-                )
-            else:
-                draw_color = base_color
+            draw_color = base_color
         
         pygame.draw.rect(screen, draw_color, draw_rect, border_radius=8)
         
-        is_hovered = self.animation.hover_progress > 0.5
         border_color = UI_COLORS['highlight_border'] if is_hovered else (60, 70, 80)
+        border_width = 4 if is_hovered else 2
         pygame.draw.rect(screen, border_color, draw_rect, border_width, border_radius=8)
         
         try:
