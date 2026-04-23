@@ -101,6 +101,10 @@ class MainMenu:
         self.mouse_pos = (0, 0)
         self.mouse_down = False
         self.last_time = pygame.time.get_ticks() / 1000.0
+        
+        self._init_background_particles()
+        self.background_pulse_time = 0.0
+        self.title_animation_time = 0.0
     
     def _init_fonts(self):
         language = self.loc.get_language()
@@ -149,6 +153,25 @@ class MainMenu:
     
     def _init_background_particles(self):
         import random
+        self.background_particles = ParticleSystem()
+        self.floating_particles = []
+        
+        for _ in range(50):
+            particle = {
+                'x': random.randint(0, SCREEN_WIDTH),
+                'y': random.randint(0, SCREEN_HEIGHT),
+                'size': random.randint(2, 6),
+                'speed_x': random.uniform(-0.3, 0.3),
+                'speed_y': random.uniform(-0.2, 0.2),
+                'alpha': random.randint(30, 100),
+                'color': (
+                    random.randint(60, 120),
+                    random.randint(80, 140),
+                    random.randint(100, 160)
+                )
+            }
+            self.floating_particles.append(particle)
+        
         for _ in range(30):
             x = random.randint(0, SCREEN_WIDTH)
             y = random.randint(0, SCREEN_HEIGHT)
@@ -168,12 +191,30 @@ class MainMenu:
         dt = current_time - self.last_time
         self.last_time = current_time
         
+        self.background_pulse_time += dt
+        self.title_animation_time += dt
+        
+        for particle in self.floating_particles:
+            particle['x'] += particle['speed_x']
+            particle['y'] += particle['speed_y']
+            
+            if particle['x'] < -10:
+                particle['x'] = SCREEN_WIDTH + 10
+            elif particle['x'] > SCREEN_WIDTH + 10:
+                particle['x'] = -10
+            if particle['y'] < -10:
+                particle['y'] = SCREEN_HEIGHT + 10
+            elif particle['y'] > SCREEN_HEIGHT + 10:
+                particle['y'] = -10
+        
         for button in self.buttons:
             button.update(self.mouse_pos, self.mouse_down, dt)
     
     def draw(self):
-        self.screen.fill(BACKGROUND_COLOR)
+        self._draw_gradient_background()
+        self._draw_floating_particles()
         self._draw_background_hexagons()
+        self._draw_decorative_elements()
         self._draw_title()
         
         for button in self.buttons:
@@ -181,11 +222,118 @@ class MainMenu:
         
         self._draw_version()
     
+    def _draw_gradient_background(self):
+        import math
+        
+        gradient_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        
+        for y in range(SCREEN_HEIGHT):
+            progress = y / SCREEN_HEIGHT
+            pulse = math.sin(self.background_pulse_time * 0.5) * 0.1 + 0.9
+            
+            top_color = (
+                int(BACKGROUND_COLOR[0] * pulse),
+                int(BACKGROUND_COLOR[1] * pulse),
+                int(BACKGROUND_COLOR[2] * pulse)
+            )
+            bottom_color = (
+                int(min(255, BACKGROUND_COLOR[0] + 15) * pulse),
+                int(min(255, BACKGROUND_COLOR[1] + 20) * pulse),
+                int(min(255, BACKGROUND_COLOR[2] + 25) * pulse)
+            )
+            
+            r = int(top_color[0] + (bottom_color[0] - top_color[0]) * progress)
+            g = int(top_color[1] + (bottom_color[1] - top_color[1]) * progress)
+            b = int(top_color[2] + (bottom_color[2] - top_color[2]) * progress)
+            
+            pygame.draw.line(gradient_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+        
+        self.screen.blit(gradient_surface, (0, 0))
+    
+    def _draw_floating_particles(self):
+        import math
+        
+        for particle in self.floating_particles:
+            pulse_alpha = particle['alpha'] + int(math.sin(self.background_pulse_time * 2 + particle['x']) * 20)
+            pulse_alpha = max(10, min(150, pulse_alpha))
+            
+            color_with_alpha = (
+                particle['color'][0],
+                particle['color'][1],
+                particle['color'][2],
+                pulse_alpha
+            )
+            
+            particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+            pygame.draw.circle(
+                particle_surface,
+                color_with_alpha,
+                (particle['size'], particle['size']),
+                particle['size']
+            )
+            self.screen.blit(
+                particle_surface,
+                (int(particle['x'] - particle['size']), int(particle['y'] - particle['size']))
+            )
+    
+    def _draw_decorative_elements(self):
+        import math
+        
+        corner_size = 60
+        alpha = 80
+        
+        corners = [
+            (0, 0),
+            (SCREEN_WIDTH - corner_size, 0),
+            (0, SCREEN_HEIGHT - corner_size),
+            (SCREEN_WIDTH - corner_size, SCREEN_HEIGHT - corner_size)
+        ]
+        
+        for i, (x, y) in enumerate(corners):
+            rotation = i * math.pi / 2
+            
+            corner_surface = pygame.Surface((corner_size, corner_size), pygame.SRCALPHA)
+            
+            points = [
+                (0, 0),
+                (corner_size, 0),
+                (0, corner_size)
+            ]
+            
+            glow_color = (
+                UI_COLORS['highlight_border'][0],
+                UI_COLORS['highlight_border'][1],
+                UI_COLORS['highlight_border'][2],
+                alpha
+            )
+            
+            pygame.draw.polygon(corner_surface, glow_color, points)
+            pygame.draw.polygon(corner_surface, (255, 255, 255, alpha // 2), points, 2)
+            
+            rotated_surface = pygame.transform.rotate(corner_surface, math.degrees(rotation))
+            self.screen.blit(rotated_surface, (x, y))
+        
+        pulse_size = 100 + math.sin(self.background_pulse_time) * 20
+        
+        center_glow = pygame.Surface((pulse_size * 2, pulse_size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            center_glow,
+            (UI_COLORS['menu_title'][0], UI_COLORS['menu_title'][1], UI_COLORS['menu_title'][2], 30),
+            (pulse_size, pulse_size),
+            pulse_size
+        )
+        self.screen.blit(
+            center_glow,
+            (SCREEN_WIDTH // 2 - pulse_size, SCREEN_HEIGHT // 2 - pulse_size)
+        )
+    
     def _draw_background_hexagons(self):
         import math
         hex_size = 50
         offset_x = 0
         offset_y = 0
+        
+        pulse = math.sin(self.background_pulse_time * 0.3) * 0.2 + 0.8
         
         for row in range(0, SCREEN_HEIGHT // hex_size + 2):
             for col in range(0, SCREEN_WIDTH // hex_size + 2):
@@ -202,7 +350,7 @@ class MainMenu:
                     cy = y + hex_size * 0.8 * math.sin(angle)
                     corners.append((cx, cy))
                 
-                alpha = 30
+                alpha = int(25 * pulse)
                 color = (
                     BACKGROUND_COLOR[0] + 20,
                     BACKGROUND_COLOR[1] + 25,
@@ -215,8 +363,12 @@ class MainMenu:
                 self.screen.blit(s, (0, 0))
     
     def _draw_title(self):
+        import math
+        
         title_text = self.loc.t('game_title')
         subtitle_text = self.loc.t('game_subtitle')
+        
+        title_pulse = math.sin(self.title_animation_time * 2) * 0.1 + 1.0
         
         try:
             title_surface = self.font_title.render(title_text, True, UI_COLORS['menu_title'])
@@ -224,14 +376,89 @@ class MainMenu:
             fallback_font = pygame.font.Font(None, 56)
             title_surface = fallback_font.render(title_text, True, UI_COLORS['menu_title'])
         
+        title_width = title_surface.get_width()
+        title_height = title_surface.get_height()
+        
+        glow_layers = 3
+        for i in range(glow_layers):
+            glow_size = (glow_layers - i) * 4
+            glow_alpha = 50 - i * 15
+            
+            glow_surface = pygame.Surface((title_width + glow_size * 2, title_height + glow_size * 2), pygame.SRCALPHA)
+            
+            try:
+                glow_text = self.font_title.render(title_text, True, (
+                    UI_COLORS['menu_title'][0],
+                    UI_COLORS['menu_title'][1],
+                    UI_COLORS['menu_title'][2],
+                    glow_alpha
+                ))
+            except Exception:
+                fallback_font = pygame.font.Font(None, 56)
+                glow_text = fallback_font.render(title_text, True, (
+                    UI_COLORS['menu_title'][0],
+                    UI_COLORS['menu_title'][1],
+                    UI_COLORS['menu_title'][2],
+                    glow_alpha
+                ))
+            
+            glow_rect = glow_text.get_rect(center=(glow_surface.get_width() // 2, glow_surface.get_height() // 2))
+            glow_surface.blit(glow_text, glow_rect)
+            
+            scaled_glow = pygame.transform.scale(
+                glow_surface,
+                (int(glow_surface.get_width() * title_pulse), int(glow_surface.get_height() * title_pulse))
+            )
+            
+            glow_rect = scaled_glow.get_rect(center=(SCREEN_WIDTH // 2, 150))
+            self.screen.blit(scaled_glow, glow_rect)
+        
         title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 150))
         self.screen.blit(title_surface, title_rect)
+        
+        subtitle_pulse = math.sin(self.title_animation_time * 1.5 + 0.5) * 0.05 + 1.0
         
         try:
             subtitle_surface = self.font_subtitle.render(subtitle_text, True, UI_COLORS['help_text'])
         except Exception:
             fallback_font = pygame.font.Font(None, 28)
             subtitle_surface = fallback_font.render(subtitle_text, True, UI_COLORS['help_text'])
+        
+        subtitle_width = subtitle_surface.get_width()
+        subtitle_height = subtitle_surface.get_height()
+        
+        for i in range(2):
+            glow_size = (2 - i) * 3
+            glow_alpha = 30 - i * 10
+            
+            glow_surface = pygame.Surface((subtitle_width + glow_size * 2, subtitle_height + glow_size * 2), pygame.SRCALPHA)
+            
+            try:
+                glow_text = self.font_subtitle.render(subtitle_text, True, (
+                    UI_COLORS['help_text'][0],
+                    UI_COLORS['help_text'][1],
+                    UI_COLORS['help_text'][2],
+                    glow_alpha
+                ))
+            except Exception:
+                fallback_font = pygame.font.Font(None, 28)
+                glow_text = fallback_font.render(subtitle_text, True, (
+                    UI_COLORS['help_text'][0],
+                    UI_COLORS['help_text'][1],
+                    UI_COLORS['help_text'][2],
+                    glow_alpha
+                ))
+            
+            glow_rect = glow_text.get_rect(center=(glow_surface.get_width() // 2, glow_surface.get_height() // 2))
+            glow_surface.blit(glow_text, glow_rect)
+            
+            scaled_glow = pygame.transform.scale(
+                glow_surface,
+                (int(glow_surface.get_width() * subtitle_pulse), int(glow_surface.get_height() * subtitle_pulse))
+            )
+            
+            glow_rect = scaled_glow.get_rect(center=(SCREEN_WIDTH // 2, 220))
+            self.screen.blit(scaled_glow, glow_rect)
         
         subtitle_rect = subtitle_surface.get_rect(center=(SCREEN_WIDTH // 2, 220))
         self.screen.blit(subtitle_surface, subtitle_rect)
