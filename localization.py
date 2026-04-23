@@ -40,8 +40,10 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'end_turn': 'End Turn',
         'build': 'Build',
+        'train': 'Train Unit',
         'cancel': 'Cancel',
         'select_building': 'Select Building:',
+        'select_unit': 'Select Unit:',
         
         'moved': 'Moved',
         'can_move': 'Can move',
@@ -61,6 +63,10 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_tile_has_building': 'Tile already has a building!',
         'msg_not_enough_resources': 'Not enough resources!',
         'msg_built': 'Built',
+        'msg_trained': 'Trained',
+        'msg_can_only_train_own': 'Can only train units in your own barracks!',
+        'msg_need_barracks': 'Need a barracks to train units!',
+        'msg_tile_has_unit': 'Tile already has a unit!',
         'msg_ai_turn': 'AI Turn',
         'msg_new_turn_gained': 'New turn! Gained:',
         'msg_game_over': 'Game over!',
@@ -190,8 +196,10 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'end_turn': '结束回合',
         'build': '建造建筑',
+        'train': '训练单位',
         'cancel': '取消',
         'select_building': '选择建筑:',
+        'select_unit': '选择单位:',
         
         'moved': '已移动',
         'can_move': '可移动',
@@ -211,6 +219,10 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_tile_has_building': '该地块已有建筑！',
         'msg_not_enough_resources': '资源不足！',
         'msg_built': '建造了',
+        'msg_trained': '训练了',
+        'msg_can_only_train_own': '只能在自己的军营训练单位！',
+        'msg_need_barracks': '需要军营才能训练单位！',
+        'msg_tile_has_unit': '该地块已有单位！',
         'msg_ai_turn': 'AI 回合',
         'msg_new_turn_gained': '新回合！获得资源:',
         'msg_game_over': '游戏结束！',

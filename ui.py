@@ -160,6 +160,18 @@ class UI:
                 self._draw_button(screen, build_button)
                 button_y += button_height + 10
             
+            if selected_tile.building and selected_tile.building.building_type == 'barracks':
+                if not selected_tile.unit:
+                    train_button = {
+                        'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                        'text': self.loc.t('train'),
+                        'action': 'open_train_popup',
+                        'color': (80, 150, 100)
+                    }
+                    self.buttons.append(train_button)
+                    self._draw_button(screen, train_button)
+                    button_y += button_height + 10
+            
             if selected_tile.unit:
                 move_text = self.loc.t('moved') if selected_tile.unit.moved_this_turn else self.loc.t('can_move')
                 attack_text = self.loc.t('attacked') if selected_tile.unit.attacked_this_turn else self.loc.t('can_attack')
