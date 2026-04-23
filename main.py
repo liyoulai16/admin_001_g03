@@ -116,6 +116,8 @@ class Game:
         self.settings_menu = SettingsMenu(self.screen, self.loc, self.animation_manager)
         self.help_menu = HelpMenu(self.screen, self.loc)
         
+        self._popup_initialized = False
+        
         for i, player in enumerate(self.players):
             if player.is_ai:
                 player.name = f"{self.loc.t('ai')} {player.player_id}"

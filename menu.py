@@ -96,12 +96,6 @@ class MainMenu:
         self.mouse_pos = (0, 0)
         self.mouse_down = False
         self.last_time = pygame.time.get_ticks() / 1000.0
-        
-        self.background_particles = ParticleSystem()
-        self._init_background_particles()
-        
-        self.title_pulse = 0.0
-        self.title_direction = 1
     
     def _init_fonts(self):
         language = self.loc.get_language()
@@ -171,29 +165,10 @@ class MainMenu:
         
         for button in self.buttons:
             button.update(self.mouse_pos, self.mouse_down, dt)
-        
-        self.title_pulse += dt * 2 * self.title_direction
-        if self.title_pulse > 1.0:
-            self.title_direction = -1
-        elif self.title_pulse < 0.0:
-            self.title_direction = 1
-        
-        self.background_particles.update(dt)
-        if len(self.background_particles.particles) < 20:
-            import random
-            x = random.randint(0, SCREEN_WIDTH)
-            y = random.randint(0, SCREEN_HEIGHT)
-            color = (
-                random.randint(40, 80),
-                random.randint(60, 100),
-                random.randint(80, 120)
-            )
-            self.background_particles.emit(x, y, color, count=1, spread=20)
     
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
         self._draw_background_hexagons()
-        self.background_particles.draw(self.screen)
         self._draw_title()
         
         for button in self.buttons:
@@ -238,40 +213,13 @@ class MainMenu:
         title_text = self.loc.t('game_title')
         subtitle_text = self.loc.t('game_subtitle')
         
-        pulse_scale = 1.0 + 0.02 * self.title_pulse
-        
         try:
             title_surface = self.font_title.render(title_text, True, UI_COLORS['menu_title'])
         except Exception:
             fallback_font = pygame.font.Font(None, 56)
             title_surface = fallback_font.render(title_text, True, UI_COLORS['menu_title'])
         
-        if pulse_scale != 1.0:
-            original_size = title_surface.get_size()
-            new_size = (int(original_size[0] * pulse_scale), int(original_size[1] * pulse_scale))
-            title_surface = pygame.transform.smoothscale(title_surface, new_size)
-        
         title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 150))
-        
-        glow_alpha = int(50 + 30 * self.title_pulse)
-        glow_color = (
-            UI_COLORS['menu_title'][0],
-            UI_COLORS['menu_title'][1],
-            UI_COLORS['menu_title'][2],
-        )
-        
-        glow_rect = pygame.Rect(
-            title_rect.x - 20,
-            title_rect.y - 20,
-            title_rect.width + 40,
-            title_rect.height + 40
-        )
-        
-        temp_surface = pygame.Surface((glow_rect.width, glow_rect.height))
-        temp_surface.set_alpha(glow_alpha)
-        temp_surface.fill(glow_color)
-        self.screen.blit(temp_surface, glow_rect)
-        
         self.screen.blit(title_surface, title_rect)
         
         try:
