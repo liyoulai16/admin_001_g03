@@ -91,11 +91,18 @@ class BasePopup:
         if not self.visible:
             return None
         
-        if self.mouse_was_down and not self.mouse_down:
+        if self.mouse_down and not self.mouse_was_down:
             for button in self.buttons:
-                if button.enabled and button.hovered:
+                button_screen_rect = pygame.Rect(
+                    button.rect.x + self.x,
+                    button.rect.y + self.y,
+                    button.rect.width,
+                    button.rect.height
+                )
+                if button.enabled and button_screen_rect.collidepoint(self.mouse_pos):
                     return button.action
-            
+        
+        if self.mouse_was_down and not self.mouse_down:
             if not self._is_point_in_popup(self.mouse_pos):
                 return 'close'
         

@@ -679,6 +679,24 @@ class Game:
                 
                 if self.game_state == GAME_STATES['MENU']:
                     self.main_menu.set_mouse_state(self.mouse_pos, False)
+                elif self.game_state == GAME_STATES['PLAYING']:
+                    settings_visible = self.settings_popup and self.settings_popup.visible
+                    build_visible = self.build_popup and self.build_popup.visible
+                    train_visible = self.train_popup and self.train_popup.visible
+                    
+                    popup_action = None
+                    if settings_visible:
+                        self.settings_popup.set_mouse_state(event.pos, False)
+                        popup_action = self.settings_popup.handle_click()
+                    elif build_visible:
+                        self.build_popup.set_mouse_state(event.pos, False)
+                        popup_action = self.build_popup.handle_click()
+                    elif train_visible:
+                        self.train_popup.set_mouse_state(event.pos, False)
+                        popup_action = self.train_popup.handle_click()
+                    
+                    if popup_action:
+                        self._handle_popup_action(popup_action)
                 elif self.game_state == GAME_STATES['SETTINGS']:
                     self.settings_menu.set_mouse_state(self.mouse_pos, False)
                 elif self.game_state == GAME_STATES['HELP']:
