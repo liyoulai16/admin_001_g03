@@ -128,24 +128,26 @@ class TerrainGenerator:
         self._set_river_directions(hex_map, river_tiles)
     
     def _set_river_directions(self, hex_map: HexMap, river_tiles: List[Tuple[int, int]]):
+        river_to_list = [None] * len(river_tiles)
+        
+        for i, (q, r) in enumerate(river_tiles):
+            if i < len(river_tiles) - 1:
+                next_q, next_r = river_tiles[i+1]
+                for d_idx, (dq, dr) in enumerate(HEX_DIRECTIONS):
+                    if q + dq == next_q and r + dr == next_r:
+                        river_to_list[i] = d_idx
+                        break
+        
         for i, (q, r) in enumerate(river_tiles):
             tile = hex_map.get_tile(q, r)
             if not tile:
                 continue
             
-            if i > 0:
-                prev_q, prev_r = river_tiles[i-1]
-                for d_idx, (dq, dr) in enumerate(HEX_DIRECTIONS):
-                    if q + dq == prev_q and r + dr == prev_r:
-                        tile.river_from = d_idx
-                        break
+            if i > 0 and river_to_list[i-1] is not None:
+                tile.river_from = (river_to_list[i-1] + 4) % 6
             
-            if i < len(river_tiles) - 1:
-                next_q, next_r = river_tiles[i+1]
-                for d_idx, (dq, dr) in enumerate(HEX_DIRECTIONS):
-                    if q + dq == next_q and r + dr == next_r:
-                        tile.river_to = d_idx
-                        break
+            if i < len(river_tiles) - 1 and river_to_list[i] is not None:
+                tile.river_to = river_to_list[i]
     
     def smooth_terrain(self, hex_map: HexMap, iterations: int = 3):
         for _ in range(iterations):
