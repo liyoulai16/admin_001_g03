@@ -85,6 +85,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_attacked': 'attacked',
         'msg_damage': 'damage',
         'msg_destroyed': 'destroyed!',
+        'msg_took': 'took',
+        'msg_counter_damage': 'counter damage',
         'msg_can_only_build_own': 'Can only build on your own tiles!',
         'msg_tile_has_building': 'Tile already has a building!',
         'msg_not_enough_resources': 'Not enough resources!',
@@ -130,6 +132,12 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'back_to_menu': 'Back to Menu',
         'prev_page': 'Previous',
         'next_page': 'Next',
+        
+        'difficulty': 'Difficulty',
+        'difficulty_easy': 'Easy',
+        'difficulty_normal': 'Normal',
+        'difficulty_hard': 'Hard',
+        'select_difficulty': 'Select Difficulty:',
         
         'help_title_welcome': 'Welcome to Hex Strategy',
         'help_title_controls': 'Controls & Interface',
@@ -289,6 +297,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_attacked': '攻击',
         'msg_damage': '点伤害',
         'msg_destroyed': '被消灭！',
+        'msg_took': '受到',
+        'msg_counter_damage': '点反击伤害',
         'msg_can_only_build_own': '只能在自己的地块上建造！',
         'msg_tile_has_building': '该地块已有建筑！',
         'msg_not_enough_resources': '资源不足！',
@@ -334,6 +344,12 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'back_to_menu': '返回菜单',
         'prev_page': '上一页',
         'next_page': '下一页',
+        
+        'difficulty': '难度',
+        'difficulty_easy': '简单',
+        'difficulty_normal': '普通',
+        'difficulty_hard': '困难',
+        'select_difficulty': '选择难度：',
         
         'help_title_welcome': '欢迎来到六边形策略游戏',
         'help_title_controls': '操作与界面',

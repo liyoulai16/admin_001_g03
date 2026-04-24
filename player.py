@@ -113,6 +113,7 @@ class Unit:
             self.can_build = info.get('can_build', False)
             self.can_expand_territory = info.get('can_expand_territory', False)
             self.can_settle = info.get('can_settle', False)
+            self.is_melee = info.get('is_melee', True)
         else:
             self.name = unit_type
             self.attack = 10
@@ -123,6 +124,7 @@ class Unit:
             self.can_build = False
             self.can_expand_territory = False
             self.can_settle = False
+            self.is_melee = True
     
     def reset_for_new_turn(self):
         self.moved_this_turn = False

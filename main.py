@@ -14,11 +14,11 @@ from config import (
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
 from player import Player, Building, Unit
-from ai import SimpleAI
+from ai import SimpleAI, Difficulty
 from ui import UI
 from localization import Localization
 from animation import AnimationManager
-from menu import MainMenu, SettingsMenu
+from menu import MainMenu, SettingsMenu, DifficultyMenu
 from help_menu import HelpMenu
 from popup import SettingsPopup, BuildPopup, TrainPopup
 
@@ -40,10 +40,12 @@ class Game:
         
         self.main_menu = MainMenu(self.screen, self.loc, self.animation_manager)
         self.settings_menu = SettingsMenu(self.screen, self.loc, self.animation_manager)
+        self.difficulty_menu = DifficultyMenu(self.screen, self.loc, self.animation_manager)
         self.help_menu = HelpMenu(self.screen, self.loc)
         
         self.game_state = GAME_STATES['MENU']
         self.previous_state = None
+        self.selected_difficulty = Difficulty.NORMAL
         
         self.hex_map: Optional[HexMap] = None
         self.players: List[Player] = []
@@ -157,7 +159,10 @@ class Game:
             return template.format(*args)
         return template
     
-    def new_game(self):
+    def new_game(self, difficulty: str = None):
+        if difficulty is None:
+            difficulty = self.selected_difficulty
+        
         self.hex_map = HexMap(MAP_ROWS, MAP_COLS)
         terrain_gen = TerrainGenerator(seed=42)
         terrain_gen.generate_random_map(self.hex_map, MAP_ROWS, MAP_COLS)
@@ -169,7 +174,7 @@ class Game:
         player2.name = f"{self.loc.t('ai')} 2"
         
         self.players = [player1, player2]
-        self.ais = {2: SimpleAI(player2)}
+        self.ais = {2: SimpleAI(player2, difficulty)}
         
         start_positions = terrain_gen.get_start_positions(self.hex_map, 2)
         
@@ -721,6 +726,23 @@ class Game:
             
             msg = f"{unit_name} {self._get_msg('msg_attacked')} {target_name}, {damage} {self._get_msg('msg_damage')}"
             
+            if unit.is_melee and target.health > 0:
+                counter_damage = max(1, (target.attack // 3) - unit.defense // 4)
+                unit.health -= counter_damage
+                msg += f", {unit_name} {self._get_msg('msg_took')} {counter_damage} {self._get_msg('msg_counter_damage')}"
+                
+                if unit.health <= 0:
+                    unit.owner.remove_unit(unit)
+                    source_tile = self.hex_map.get_tile(unit.tile_q, unit.tile_r)
+                    if source_tile:
+                        if unit.can_build:
+                            source_tile.builder_unit = None
+                        elif unit.can_settle:
+                            source_tile.settler_unit = None
+                        else:
+                            source_tile.unit = None
+                    msg += f", {unit_name} {self._get_msg('msg_destroyed')}"
+            
             if target.health <= 0:
                 target.owner.remove_unit(target)
                 if is_builder_target:
@@ -959,6 +981,9 @@ class Game:
         elif self.game_state == GAME_STATES['SETTINGS']:
             self.settings_menu.update()
             self.settings_menu.draw()
+        elif self.game_state == GAME_STATES['DIFFICULTY']:
+            self.difficulty_menu.update()
+            self.difficulty_menu.draw()
         elif self.game_state == GAME_STATES['PLAYING'] or self.game_state == GAME_STATES['PAUSED']:
             self._draw_game()
         elif self.game_state == GAME_STATES['HELP']:
@@ -2395,6 +2420,8 @@ class Game:
                     self.main_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
                 elif self.game_state == GAME_STATES['SETTINGS']:
                     self.settings_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
+                elif self.game_state == GAME_STATES['DIFFICULTY']:
+                    self.difficulty_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
                 elif self.game_state == GAME_STATES['HELP']:
                     self.help_menu.set_mouse_state(event.pos, self.mouse_buttons_pressed.get(1, False))
             
@@ -2518,6 +2545,12 @@ class Game:
                     elif self.game_state == GAME_STATES['SETTINGS']:
                         self.settings_menu.set_mouse_state(event.pos, True)
                         action = self.settings_menu.handle_click()
+                        if action:
+                            self._handle_menu_action(action)
+                    
+                    elif self.game_state == GAME_STATES['DIFFICULTY']:
+                        self.difficulty_menu.set_mouse_state(event.pos, True)
+                        action = self.difficulty_menu.handle_click()
                         if action:
                             self._handle_menu_action(action)
                     
@@ -2651,8 +2684,7 @@ class Game:
     
     def _handle_menu_action(self, action: str):
         if action == 'start_game':
-            self.new_game()
-            self.game_state = GAME_STATES['PLAYING']
+            self.game_state = GAME_STATES['DIFFICULTY']
         
         elif action == 'show_help':
             self.previous_state = self.game_state
@@ -2667,6 +2699,21 @@ class Game:
         
         elif action == 'back_to_menu':
             self.game_state = GAME_STATES['MENU']
+        
+        elif action == 'select_easy':
+            self.selected_difficulty = Difficulty.EASY
+            self.new_game()
+            self.game_state = GAME_STATES['PLAYING']
+        
+        elif action == 'select_normal':
+            self.selected_difficulty = Difficulty.NORMAL
+            self.new_game()
+            self.game_state = GAME_STATES['PLAYING']
+        
+        elif action == 'select_hard':
+            self.selected_difficulty = Difficulty.HARD
+            self.new_game()
+            self.game_state = GAME_STATES['PLAYING']
         
         elif action == 'set_language_en':
             self.set_language('en')
