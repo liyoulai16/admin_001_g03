@@ -104,6 +104,13 @@ UNIT_DETAIL_COLORS = {
         'hammer': (150, 150, 150),
         'handle': (101, 67, 33),
     },
+    'cavalry': {
+        'body': (120, 80, 150),
+        'helmet': (100, 80, 120),
+        'horse': (139, 90, 43),
+        'sword': (200, 200, 200),
+        'saddle': (80, 60, 40),
+    },
 }
 
 TERRAIN_NAMES = {
@@ -127,7 +134,7 @@ BUILDING_INFO = {
         'cost': {'gold': 80, 'wood': 60},
         'production': {'gold': 0, 'wood': 0, 'food': 0},
         'description': 'Allows training military units',
-        'can_train': ['warrior', 'archer'],
+        'can_train': ['warrior', 'archer', 'cavalry'],
     },
     'farm': {
         'name': 'Farm',
@@ -149,6 +156,7 @@ BUILDING_INFO = {
         'production': {'gold': 0, 'wood': 8, 'food': 0},
         'description': 'Produces wood per turn',
         'can_train': [],
+        'required_terrain': ['forest'],
     },
 }
 
@@ -179,6 +187,16 @@ UNIT_INFO = {
         'health': 50,
         'movement': 2,
         'can_build': True,
+        'can_expand_territory': True,
+    },
+    'cavalry': {
+        'name': 'Cavalry',
+        'cost': {'gold': 40, 'wood': 15, 'food': 30},
+        'attack': 8,
+        'defense': 6,
+        'health': 80,
+        'movement': 4,
+        'can_build': False,
     },
 }
 

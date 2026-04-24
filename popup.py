@@ -297,9 +297,33 @@ class BuildPopup(BasePopup):
     def __init__(self, width: int, height: int, localization: Localization, 
                  font_manager: FontManager, player):
         self.player = player
+        self.selected_tile = None
         super().__init__(width, height, localization.t('select_building'), localization, font_manager)
         
         self._create_buttons()
+    
+    def set_selected_tile(self, tile):
+        self.selected_tile = tile
+        self._update_buttons()
+    
+    def _can_build_on_tile(self, building_type: str) -> bool:
+        if not self.selected_tile:
+            return False
+        
+        if self.selected_tile.building:
+            return False
+        
+        if self.selected_tile.terrain in ['mountain', 'water']:
+            return False
+        
+        building_info = BUILDING_INFO.get(building_type, {})
+        required_terrain = building_info.get('required_terrain', [])
+        
+        if required_terrain:
+            if self.selected_tile.terrain not in required_terrain:
+                return False
+        
+        return True
     
     def _create_buttons(self):
         button_width = 220
@@ -310,19 +334,34 @@ class BuildPopup(BasePopup):
         for building_type, info in BUILDING_INFO.items():
             cost = info['cost']
             can_afford = self.player.can_afford(cost)
+            can_build = self._can_build_on_tile(building_type)
             
             cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
             building_name = self.loc.get_building_name(building_type)
-            button_text = f"{building_name} ({cost_str})"
             
-            button_color = (80, 80, 150) if can_afford else (80, 80, 80)
+            required_terrain = info.get('required_terrain', [])
+            if required_terrain:
+                terrain_names = ", ".join([self.loc.get_terrain_name(t) for t in required_terrain])
+                button_text = f"{building_name} ({cost_str}) [{terrain_names} only]"
+            else:
+                button_text = f"{building_name} ({cost_str})"
+            
+            if can_afford and can_build:
+                button_color = (80, 120, 80)
+                enabled = True
+            elif can_afford and not can_build:
+                button_color = (120, 100, 80)
+                enabled = False
+            else:
+                button_color = (80, 80, 80)
+                enabled = False
             
             button = PopupButton(
                 pygame.Rect(center_x, start_y, button_width, button_height),
                 button_text,
                 f'build_{building_type}',
                 color=button_color,
-                enabled=can_afford
+                enabled=enabled
             )
             self.buttons.append(button)
             
@@ -338,6 +377,10 @@ class BuildPopup(BasePopup):
         )
         self.buttons.append(close_button)
     
+    def _update_buttons(self):
+        self.buttons = []
+        self._create_buttons()
+    
     def update_player(self, player):
         self.player = player
         for button in self.buttons:
@@ -346,8 +389,17 @@ class BuildPopup(BasePopup):
                 if building_type in BUILDING_INFO:
                     cost = BUILDING_INFO[building_type]['cost']
                     can_afford = self.player.can_afford(cost)
-                    button.enabled = can_afford
-                    button.color = (80, 80, 150) if can_afford else (80, 80, 80)
+                    can_build = self._can_build_on_tile(building_type)
+                    
+                    if can_afford and can_build:
+                        button.color = (80, 120, 80)
+                        button.enabled = True
+                    elif can_afford and not can_build:
+                        button.color = (120, 100, 80)
+                        button.enabled = False
+                    else:
+                        button.color = (80, 80, 80)
+                        button.enabled = False
 
 
 class TrainPopup(BasePopup):

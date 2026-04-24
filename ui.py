@@ -161,6 +161,17 @@ class UI:
                     self._draw_button(screen, build_button)
                     button_y += button_height + 10
             
+            if selected_tile.builder_unit and selected_tile.builder_unit.can_expand_territory:
+                expand_button = {
+                    'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                    'text': self.loc.t('expand_territory'),
+                    'action': 'expand_territory',
+                    'color': (100, 150, 100)
+                }
+                self.buttons.append(expand_button)
+                self._draw_button(screen, expand_button)
+                button_y += button_height + 10
+            
             if selected_tile.building:
                 from config import BUILDING_INFO, UNIT_INFO
                 building_type = selected_tile.building.building_type
