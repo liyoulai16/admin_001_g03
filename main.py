@@ -371,6 +371,22 @@ class Game:
         
         self.select_tile(target_tile)
     
+    def _can_expand_tile(self, tile, current_player):
+        if tile.owner == current_player:
+            return False, None
+        
+        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            return False, None
+        
+        neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
+        for nq, nr in neighbors:
+            neighbor_tile = self.hex_map.get_tile(nq, nr)
+            if neighbor_tile and neighbor_tile.owner == current_player:
+                return True, tile
+        
+        return False, None
+    
     def expand_territory(self):
         if not self.selected_tile:
             return
@@ -383,31 +399,34 @@ class Game:
             return
         
         current_player = self.get_current_player()
-        target_tile = self.selected_tile
+        builder_tile = self.selected_tile
         
         if builder.expanded_territory_this_turn:
             self.add_message(self._get_msg('msg_already_expanded_this_turn'))
             return
         
-        if target_tile.owner == current_player:
-            self.add_message(self._get_msg('msg_already_own_territory'))
-            return
+        target_tile = None
         
-        terrain_info = TERRAIN_TYPES.get(target_tile.terrain, {})
-        if not terrain_info.get('passable', True):
-            self.add_message(self._get_msg('msg_cannot_expand_impassable'))
-            return
+        if builder_tile.owner != current_player:
+            can_expand, found_tile = self._can_expand_tile(builder_tile, current_player)
+            if can_expand:
+                target_tile = found_tile
         
-        neighbors = self.hex_map.get_neighbors(target_tile.q, target_tile.r)
-        has_adjacent_ally = False
-        for nq, nr in neighbors:
-            neighbor_tile = self.hex_map.get_tile(nq, nr)
-            if neighbor_tile and neighbor_tile.owner == current_player:
-                has_adjacent_ally = True
-                break
+        if target_tile is None:
+            neighbors = self.hex_map.get_neighbors(builder_tile.q, builder_tile.r)
+            for nq, nr in neighbors:
+                neighbor_tile = self.hex_map.get_tile(nq, nr)
+                if neighbor_tile:
+                    can_expand, found_tile = self._can_expand_tile(neighbor_tile, current_player)
+                    if can_expand:
+                        target_tile = found_tile
+                        break
         
-        if not has_adjacent_ally:
-            self.add_message(self._get_msg('msg_no_adjacent_ally_territory'))
+        if target_tile is None:
+            if builder_tile.owner == current_player:
+                self.add_message(self._get_msg('msg_no_expandable_territory'))
+            else:
+                self.add_message(self._get_msg('msg_no_adjacent_ally_territory'))
             return
         
         if not current_player.can_afford(EXPAND_TERRITORY_COST):
@@ -1353,6 +1372,8 @@ class Game:
             self.map_offset_y += self.scroll_speed
         elif mouse_y > SCREEN_HEIGHT - self.edge_threshold:
             self.map_offset_y -= self.scroll_speed
+        
+        self._clamp_map_offset()
     
     def _draw_unit_detail_panel(self, screen: pygame.Surface):
         if not self.selected_unit:
@@ -1814,6 +1835,41 @@ class Game:
             self.map_offset_x = mouse_x - new_offset_x
             self.map_offset_y = mouse_y - new_offset_y
     
+    def _get_map_bounds(self):
+        if not self.hex_map:
+            return 0, 0, 0, 0
+        
+        map_width = HEX_SIZE * 3/2 * self.hex_map.cols
+        map_height = HEX_SIZE * math.sqrt(3) * (self.hex_map.rows + 0.5)
+        
+        scaled_width = map_width * self.zoom_level
+        scaled_height = map_height * self.zoom_level
+        
+        return scaled_width, scaled_height, map_width, map_height
+    
+    def _clamp_map_offset(self):
+        if not self.hex_map:
+            return
+        
+        scaled_width, scaled_height, _, _ = self._get_map_bounds()
+        
+        max_offset_x = SCREEN_WIDTH - scaled_width * 0.5
+        min_offset_x = -scaled_width * 0.5
+        max_offset_y = SCREEN_HEIGHT - scaled_height * 0.5
+        min_offset_y = -scaled_height * 0.5
+        
+        self.map_offset_x = max(min_offset_x, min(max_offset_x, self.map_offset_x))
+        self.map_offset_y = max(min_offset_y, min(max_offset_y, self.map_offset_y))
+    
+    def _center_map(self):
+        if not self.hex_map:
+            return
+        
+        scaled_width, scaled_height, _, _ = self._get_map_bounds()
+        
+        self.map_offset_x = (SCREEN_WIDTH - scaled_width) / 2
+        self.map_offset_y = (SCREEN_HEIGHT - scaled_height) / 2
+    
     def _toggle_unit_detail_panel(self):
         if self.selected_unit:
             self.unit_detail_panel_visible = not self.unit_detail_panel_visible
@@ -1968,6 +2024,11 @@ class Game:
                     self.help_menu.handle_scroll(event.y)
                 elif self.game_state == GAME_STATES['PLAYING']:
                     self._handle_zoom(event.y, self.mouse_pos)
+            
+            elif event.type == pygame.KEYDOWN:
+                if self.game_state == GAME_STATES['PLAYING']:
+                    if event.key == pygame.K_SPACE:
+                        self._center_map()
         
         if self.game_state == GAME_STATES['PLAYING']:
             keys = pygame.key.get_pressed()
@@ -1979,6 +2040,8 @@ class Game:
                 self.map_offset_y += 5
             if keys[pygame.K_DOWN]:
                 self.map_offset_y -= 5
+            
+            self._clamp_map_offset()
             
             if keys[pygame.K_ESCAPE]:
                 self.game_state = GAME_STATES['MENU']
