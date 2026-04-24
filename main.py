@@ -379,6 +379,24 @@ class Game:
                 return True
         return False
     
+    def _can_expand_now(self, tile, current_player):
+        if not tile:
+            return False
+        if not tile.builder_unit:
+            return False
+        if not tile.builder_unit.can_expand_territory:
+            return False
+        if tile.builder_unit.expanded_territory_this_turn:
+            return False
+        if tile.owner == current_player:
+            return False
+        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            return False
+        if not self._has_adjacent_ally(tile, current_player):
+            return False
+        return True
+    
     def expand_territory(self):
         if not self.selected_tile:
             return
@@ -778,9 +796,12 @@ class Game:
         
         self.ui.set_mouse_state(self.mouse_pos, self.mouse_buttons_pressed.get(1, False))
         
-        self.ui.draw_resource_panel(self.screen, self.get_current_player(), self.turn)
+        current_player = self.get_current_player()
+        can_expand = self._can_expand_now(self.selected_tile, current_player)
+        
+        self.ui.draw_resource_panel(self.screen, current_player, self.turn)
         self.ui.draw_tile_info(self.screen, self.selected_tile)
-        buttons = self.ui.draw_action_buttons(self.screen, self.selected_tile, self.get_current_player())
+        buttons = self.ui.draw_action_buttons(self.screen, self.selected_tile, current_player, can_expand)
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
         turn_indicator = self.ui.font_large.render(
