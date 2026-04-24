@@ -363,12 +363,8 @@ class MainMenu:
                 self.screen.blit(s, (0, 0))
     
     def _draw_title(self):
-        import math
-        
         title_text = self.loc.t('game_title')
         subtitle_text = self.loc.t('game_subtitle')
-        
-        title_pulse = math.sin(self.title_animation_time * 2) * 0.1 + 1.0
         
         try:
             title_surface = self.font_title.render(title_text, True, UI_COLORS['menu_title'])
@@ -376,89 +372,14 @@ class MainMenu:
             fallback_font = pygame.font.Font(None, 56)
             title_surface = fallback_font.render(title_text, True, UI_COLORS['menu_title'])
         
-        title_width = title_surface.get_width()
-        title_height = title_surface.get_height()
-        
-        glow_layers = 3
-        for i in range(glow_layers):
-            glow_size = (glow_layers - i) * 4
-            glow_alpha = 50 - i * 15
-            
-            glow_surface = pygame.Surface((title_width + glow_size * 2, title_height + glow_size * 2), pygame.SRCALPHA)
-            
-            try:
-                glow_text = self.font_title.render(title_text, True, (
-                    UI_COLORS['menu_title'][0],
-                    UI_COLORS['menu_title'][1],
-                    UI_COLORS['menu_title'][2],
-                    glow_alpha
-                ))
-            except Exception:
-                fallback_font = pygame.font.Font(None, 56)
-                glow_text = fallback_font.render(title_text, True, (
-                    UI_COLORS['menu_title'][0],
-                    UI_COLORS['menu_title'][1],
-                    UI_COLORS['menu_title'][2],
-                    glow_alpha
-                ))
-            
-            glow_rect = glow_text.get_rect(center=(glow_surface.get_width() // 2, glow_surface.get_height() // 2))
-            glow_surface.blit(glow_text, glow_rect)
-            
-            scaled_glow = pygame.transform.scale(
-                glow_surface,
-                (int(glow_surface.get_width() * title_pulse), int(glow_surface.get_height() * title_pulse))
-            )
-            
-            glow_rect = scaled_glow.get_rect(center=(SCREEN_WIDTH // 2, 150))
-            self.screen.blit(scaled_glow, glow_rect)
-        
         title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 150))
         self.screen.blit(title_surface, title_rect)
-        
-        subtitle_pulse = math.sin(self.title_animation_time * 1.5 + 0.5) * 0.05 + 1.0
         
         try:
             subtitle_surface = self.font_subtitle.render(subtitle_text, True, UI_COLORS['help_text'])
         except Exception:
             fallback_font = pygame.font.Font(None, 28)
             subtitle_surface = fallback_font.render(subtitle_text, True, UI_COLORS['help_text'])
-        
-        subtitle_width = subtitle_surface.get_width()
-        subtitle_height = subtitle_surface.get_height()
-        
-        for i in range(2):
-            glow_size = (2 - i) * 3
-            glow_alpha = 30 - i * 10
-            
-            glow_surface = pygame.Surface((subtitle_width + glow_size * 2, subtitle_height + glow_size * 2), pygame.SRCALPHA)
-            
-            try:
-                glow_text = self.font_subtitle.render(subtitle_text, True, (
-                    UI_COLORS['help_text'][0],
-                    UI_COLORS['help_text'][1],
-                    UI_COLORS['help_text'][2],
-                    glow_alpha
-                ))
-            except Exception:
-                fallback_font = pygame.font.Font(None, 28)
-                glow_text = fallback_font.render(subtitle_text, True, (
-                    UI_COLORS['help_text'][0],
-                    UI_COLORS['help_text'][1],
-                    UI_COLORS['help_text'][2],
-                    glow_alpha
-                ))
-            
-            glow_rect = glow_text.get_rect(center=(glow_surface.get_width() // 2, glow_surface.get_height() // 2))
-            glow_surface.blit(glow_text, glow_rect)
-            
-            scaled_glow = pygame.transform.scale(
-                glow_surface,
-                (int(glow_surface.get_width() * subtitle_pulse), int(glow_surface.get_height() * subtitle_pulse))
-            )
-            
-            glow_rect = scaled_glow.get_rect(center=(SCREEN_WIDTH // 2, 220))
-            self.screen.blit(scaled_glow, glow_rect)
         
         subtitle_rect = subtitle_surface.get_rect(center=(SCREEN_WIDTH // 2, 220))
         self.screen.blit(subtitle_surface, subtitle_rect)
