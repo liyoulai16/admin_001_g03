@@ -838,31 +838,6 @@ class Game:
         pygame.draw.polygon(self.screen, highlight_color, highlight_corners)
         
         pygame.draw.polygon(self.screen, tile.get_border_color(), highlight_corners, 1)
-        elevation_offset = 5 * scale
-        base_y = y - elevation_offset
-        
-        unit_type = unit.unit_type
-        unit_colors = UNIT_DETAIL_COLORS.get(unit_type, {})
-        
-        shadow_offset_x = 2 * scale
-        shadow_offset_y = 3 * scale
-        shadow_color = (10, 20, 30, 80)
-        shadow_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.circle(shadow_surface, shadow_color, 
-                          (int(x + shadow_offset_x), int(y + shadow_offset_y)), 
-                          int(6 * scale))
-        self.screen.blit(shadow_surface, (0, 0))
-        
-        if unit_type == 'warrior':
-            self._draw_25d_warrior(x, base_y, unit_colors, scale)
-        elif unit_type == 'archer':
-            self._draw_25d_archer(x, base_y, unit_colors, scale)
-        elif unit_type == 'builder':
-            self._draw_25d_builder(x, base_y, unit_colors, scale)
-        elif unit_type == 'cavalry':
-            self._draw_25d_cavalry(x, base_y, unit_colors, scale)
-        else:
-            self._draw_25d_default_unit(x, base_y, unit_colors, scale)
     
     def _draw_25d_town(self, x: float, y: float, owner_color: tuple, scale: float):
         detail_colors = BUILDING_DETAIL_COLORS.get('town', {})
