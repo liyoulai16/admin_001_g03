@@ -141,6 +141,9 @@ class Unit:
         if not terrain_info.get('passable', True):
             return False
         
+        if target_tile.feature == 'river':
+            return False
+        
         distance = hex_map.hex_distance(self.tile_q, self.tile_r, target_q, target_r)
         if distance > self.movement:
             return False

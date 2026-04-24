@@ -30,11 +30,6 @@ TERRAIN_TYPES = {
         'color': (150, 140, 130),
         'passable': False,
     },
-    'river': {
-        'name': 'River',
-        'color': (60, 140, 200),
-        'passable': False,
-    },
     'lake': {
         'name': 'Lake',
         'color': (40, 120, 180),
@@ -42,10 +37,30 @@ TERRAIN_TYPES = {
     },
 }
 
+RIVER_COLORS = {
+    'water': (60, 140, 200),
+    'dark_water': (40, 110, 170),
+    'light_water': (100, 180, 240),
+    'foam': (220, 240, 255),
+}
+
+HEX_DIRECTIONS = [
+    (1, 0),
+    (1, -1),
+    (0, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, 1),
+]
+
 FEATURE_TYPES = {
     'forest': {
         'name': 'Forest',
         'color': (50, 120, 50),
+    },
+    'river': {
+        'name': 'River',
+        'color': (60, 140, 200),
     },
     'none': {
         'name': 'None',
@@ -89,11 +104,6 @@ TERRAIN_DECORATION_COLORS = {
         'grass_dark': (100, 130, 70),
         'grass_light': (140, 170, 110),
         'rock': (120, 110, 100),
-    },
-    'river': {
-        'wave_dark': (30, 90, 140),
-        'wave_light': (80, 160, 220),
-        'foam': (220, 240, 255),
     },
     'lake': {
         'wave_dark': (20, 80, 130),
@@ -170,12 +180,12 @@ TERRAIN_NAMES = {
     'mountain': 'Mountain',
     'water': 'Water',
     'hill': 'Hill',
-    'river': 'River',
     'lake': 'Lake',
 }
 
 FEATURE_NAMES = {
     'forest': 'Forest',
+    'river': 'River',
     'none': 'None',
 }
 
