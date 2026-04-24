@@ -235,9 +235,9 @@ class Game:
         self.unit_selection_buttons = []
         
         current_player = self.get_current_player()
-        has_military = tile.unit and tile.unit.owner == current_player
-        has_builder = tile.builder_unit and tile.builder_unit.owner == current_player
-        has_settler = tile.settler_unit and tile.settler_unit.owner == current_player
+        has_military = tile.unit is not None and tile.unit.owner == current_player
+        has_builder = tile.builder_unit is not None and tile.builder_unit.owner == current_player
+        has_settler = tile.settler_unit is not None and tile.settler_unit.owner == current_player
         
         unit_count = sum([has_military, has_builder, has_settler])
         
