@@ -418,6 +418,11 @@ class Localization:
     def get_resource_name(self, resource_type: str) -> str:
         return self.t(resource_type)
     
+    def get_feature_name(self, feature: str) -> str:
+        if feature == 'none':
+            return self.t('none')
+        return self.t(feature)
+    
     def get_resource_icon(self, resource_type: str) -> str:
         icons = {
             'gold': 'G',
