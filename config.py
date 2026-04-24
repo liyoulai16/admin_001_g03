@@ -17,31 +17,31 @@ SELECTED_COLOR = (255, 200, 100)
 TERRAIN_TYPES = {
     'plain': {
         'name': 'Plain',
-        'color': (150, 180, 100),
+        'color': (120, 200, 80),
         'passable': True,
     },
     'hill': {
         'name': 'Hill',
-        'color': (120, 150, 90),
+        'color': (100, 170, 60),
         'passable': True,
     },
     'mountain': {
         'name': 'Mountain',
-        'color': (150, 140, 130),
+        'color': (160, 150, 140),
         'passable': False,
     },
     'lake': {
         'name': 'Lake',
-        'color': (40, 120, 180),
+        'color': (60, 150, 220),
         'passable': False,
     },
 }
 
 RIVER_COLORS = {
-    'water': (60, 140, 200),
-    'dark_water': (40, 110, 170),
-    'light_water': (100, 180, 240),
-    'foam': (220, 240, 255),
+    'water': (80, 160, 230),
+    'dark_water': (50, 120, 190),
+    'light_water': (120, 200, 255),
+    'foam': (240, 250, 255),
 }
 
 HEX_DIRECTIONS = [
@@ -56,11 +56,11 @@ HEX_DIRECTIONS = [
 FEATURE_TYPES = {
     'forest': {
         'name': 'Forest',
-        'color': (50, 120, 50),
+        'color': (30, 140, 30),
     },
     'river': {
         'name': 'River',
-        'color': (60, 140, 200),
+        'color': (80, 160, 230),
     },
     'none': {
         'name': 'None',
@@ -69,46 +69,46 @@ FEATURE_TYPES = {
 }
 
 TERRAIN_COLORS = {
-    'plain': (150, 180, 100),
-    'forest': (50, 120, 50),
-    'mountain': (150, 140, 130),
-    'water': (60, 140, 200),
-    'hill': (120, 150, 90),
-    'river': (60, 140, 200),
-    'lake': (40, 120, 180),
+    'plain': (120, 200, 80),
+    'forest': (30, 140, 30),
+    'mountain': (160, 150, 140),
+    'water': (80, 160, 230),
+    'hill': (100, 170, 60),
+    'river': (80, 160, 230),
+    'lake': (60, 150, 220),
 }
 
 TERRAIN_DECORATION_COLORS = {
     'plain': {
-        'grass_dark': (130, 160, 80),
-        'grass_light': (170, 200, 120),
-        'flower': (255, 220, 100),
+        'grass_dark': (100, 180, 60),
+        'grass_light': (150, 220, 100),
+        'flower': (255, 240, 80),
     },
     'forest': {
-        'tree_dark': (30, 80, 30),
-        'tree_light': (70, 140, 70),
-        'trunk': (101, 67, 33),
-        'foliage': (50, 120, 50),
+        'tree_dark': (20, 100, 20),
+        'tree_light': (60, 160, 60),
+        'trunk': (120, 80, 40),
+        'foliage': (40, 150, 40),
     },
     'mountain': {
-        'rock_dark': (100, 90, 80),
-        'rock_light': (180, 170, 160),
-        'snow': (250, 250, 255),
+        'rock_dark': (80, 70, 60),
+        'rock_light': (200, 190, 180),
+        'snow': (255, 255, 255),
     },
     'water': {
-        'wave_dark': (40, 110, 170),
-        'wave_light': (100, 180, 240),
-        'foam': (220, 240, 255),
+        'wave_dark': (30, 100, 160),
+        'wave_light': (120, 200, 255),
+        'foam': (240, 250, 255),
     },
     'hill': {
-        'grass_dark': (100, 130, 70),
-        'grass_light': (140, 170, 110),
-        'rock': (120, 110, 100),
+        'grass_dark': (80, 150, 50),
+        'grass_light': (120, 190, 90),
+        'rock': (140, 130, 120),
     },
     'lake': {
-        'wave_dark': (20, 80, 130),
-        'wave_light': (60, 140, 200),
-        'foam': (200, 230, 250),
+        'wave_dark': (30, 90, 150),
+        'wave_light': (80, 170, 240),
+        'foam': (220, 240, 255),
     },
 }
 
