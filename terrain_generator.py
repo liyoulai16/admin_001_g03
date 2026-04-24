@@ -1,6 +1,7 @@
 import random
 from typing import List, Tuple
 from hex_map import HexMap
+from config import TERRAIN_TYPES, FEATURE_TYPES
 
 
 class TerrainGenerator:
@@ -9,14 +10,20 @@ class TerrainGenerator:
             random.seed(seed)
     
     def generate_random_map(self, hex_map: HexMap, rows: int, cols: int) -> HexMap:
-        terrain_types = ['plain', 'forest', 'mountain', 'water', 'hill']
-        terrain_weights = [40, 25, 15, 10, 10]
+        terrain_types = ['plain', 'hill', 'mountain', 'river', 'lake']
+        terrain_weights = [40, 20, 15, 15, 10]
         
         for q in range(cols):
             offset = q // 2
             for r in range(-offset, rows - offset):
                 terrain = random.choices(terrain_types, weights=terrain_weights, k=1)[0]
-                hex_map.add_tile(q, r, terrain)
+                
+                feature = 'none'
+                if terrain in ['plain', 'hill']:
+                    if random.random() < 0.3:
+                        feature = 'forest'
+                
+                hex_map.add_tile(q, r, terrain, feature)
         
         self.smooth_terrain(hex_map)
         self.ensure_passable_start_areas(hex_map)
@@ -48,10 +55,17 @@ class TerrainGenerator:
                 tile = hex_map.get_tile(q, r)
                 if tile:
                     tile.terrain = new_terrain
+                    if new_terrain in ['plain', 'hill']:
+                        if random.random() < 0.3:
+                            tile.feature = 'forest'
+                        else:
+                            tile.feature = 'none'
+                    else:
+                        tile.feature = 'none'
     
     def ensure_passable_start_areas(self, hex_map: HexMap):
-        passable_terrains = ['plain', 'hill', 'forest']
-        unpassable_terrains = ['mountain', 'water']
+        passable_terrains = ['plain', 'hill']
+        unpassable_terrains = ['mountain', 'river', 'lake']
         
         corners = [
             (0, 0),
@@ -69,6 +83,7 @@ class TerrainGenerator:
                         tile = hex_map.get_tile(q, r)
                         if tile and tile.terrain in unpassable_terrains:
                             tile.terrain = random.choice(passable_terrains)
+                            tile.feature = 'none'
     
     def get_start_positions(self, hex_map: HexMap, num_players: int = 2) -> List[Tuple[int, int]]:
         all_tiles = list(hex_map.tiles.keys())
@@ -89,22 +104,24 @@ class TerrainGenerator:
             (max_q - 2, min_r + 2),
         ]
         
+        unpassable = ['mountain', 'river', 'lake']
+        
         for q, r in corners[:num_players]:
             if (q, r) in hex_map.tiles:
                 tile = hex_map.get_tile(q, r)
-                if tile and tile.terrain not in ['mountain', 'water']:
+                if tile and tile.terrain not in unpassable:
                     positions.append((q, r))
                 else:
                     for neighbor_q, neighbor_r in hex_map.get_neighbors(q, r):
                         neighbor = hex_map.get_tile(neighbor_q, neighbor_r)
-                        if neighbor and neighbor.terrain not in ['mountain', 'water']:
+                        if neighbor and neighbor.terrain not in unpassable:
                             positions.append((neighbor_q, neighbor_r))
                             break
         
         while len(positions) < num_players:
             q, r = random.choice(all_tiles)
             tile = hex_map.get_tile(q, r)
-            if tile and tile.terrain not in ['mountain', 'water']:
+            if tile and tile.terrain not in unpassable:
                 positions.append((q, r))
         
         return positions[:num_players]

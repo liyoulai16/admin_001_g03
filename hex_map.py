@@ -4,10 +4,11 @@ from config import HEX_SIZE, TERRAIN_COLORS, SELECTED_COLOR, HIGHLIGHT_COLOR
 
 
 class HexTile:
-    def __init__(self, q: int, r: int, terrain: str = 'plain'):
+    def __init__(self, q: int, r: int, terrain: str = 'plain', feature: str = 'none'):
         self.q = q
         self.r = r
         self.terrain = terrain
+        self.feature = feature
         self.owner = None
         self.building = None
         self.unit = None
@@ -19,6 +20,13 @@ class HexTile:
 
     def get_color(self):
         base_color = TERRAIN_COLORS.get(self.terrain, (150, 150, 150))
+        
+        if self.feature == 'forest':
+            forest_color = TERRAIN_COLORS.get('forest', (50, 120, 50))
+            r = (base_color[0] + forest_color[0]) // 2
+            g = (base_color[1] + forest_color[1]) // 2
+            b = (base_color[2] + forest_color[2]) // 2
+            base_color = (r, g, b)
         
         if self.owner is not None:
             owner_color = self.owner.color
@@ -47,8 +55,8 @@ class HexMap:
         self.cols = cols
         self.tiles: Dict[Tuple[int, int], HexTile] = {}
         
-    def add_tile(self, q: int, r: int, terrain: str = 'plain') -> HexTile:
-        tile = HexTile(q, r, terrain)
+    def add_tile(self, q: int, r: int, terrain: str = 'plain', feature: str = 'none') -> HexTile:
+        tile = HexTile(q, r, terrain, feature)
         self.tiles[(q, r)] = tile
         return tile
 

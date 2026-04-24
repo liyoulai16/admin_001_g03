@@ -313,14 +313,16 @@ class BuildPopup(BasePopup):
         if self.selected_tile.building:
             return False
         
-        if self.selected_tile.terrain in ['mountain', 'water']:
+        from config import TERRAIN_TYPES
+        terrain_info = TERRAIN_TYPES.get(self.selected_tile.terrain, {})
+        if not terrain_info.get('passable', True):
             return False
         
         building_info = BUILDING_INFO.get(building_type, {})
-        required_terrain = building_info.get('required_terrain', [])
+        required_feature = building_info.get('required_feature', [])
         
-        if required_terrain:
-            if self.selected_tile.terrain not in required_terrain:
+        if required_feature:
+            if self.selected_tile.feature not in required_feature:
                 return False
         
         return True
@@ -339,10 +341,11 @@ class BuildPopup(BasePopup):
             cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in cost.items()])
             building_name = self.loc.get_building_name(building_type)
             
-            required_terrain = info.get('required_terrain', [])
-            if required_terrain:
-                terrain_names = ", ".join([self.loc.get_terrain_name(t) for t in required_terrain])
-                button_text = f"{building_name} ({cost_str}) [{terrain_names} only]"
+            required_feature = info.get('required_feature', [])
+            if required_feature:
+                from config import FEATURE_NAMES
+                feature_names = ", ".join([FEATURE_NAMES.get(t, t) for t in required_feature])
+                button_text = f"{building_name} ({cost_str}) [{feature_names} only]"
             else:
                 button_text = f"{building_name} ({cost_str})"
             
