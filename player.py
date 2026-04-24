@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from config import PLAYER_START_RESOURCES, AI_START_RESOURCES, BUILDING_INFO, UNIT_INFO
+from config import PLAYER_START_RESOURCES, AI_START_RESOURCES, BUILDING_INFO, UNIT_INFO, TERRAIN_TYPES
 
 
 class Player:
@@ -102,6 +102,7 @@ class Unit:
         self.owner = owner
         self.moved_this_turn = False
         self.attacked_this_turn = False
+        self.expanded_territory_this_turn = False
         
         if unit_type in UNIT_INFO:
             info = UNIT_INFO[unit_type]
@@ -126,6 +127,7 @@ class Unit:
     def reset_for_new_turn(self):
         self.moved_this_turn = False
         self.attacked_this_turn = False
+        self.expanded_territory_this_turn = False
     
     def can_move_to(self, hex_map, target_q: int, target_r: int) -> bool:
         if self.moved_this_turn:
@@ -135,7 +137,8 @@ class Unit:
         if not target_tile:
             return False
         
-        if target_tile.terrain in ['mountain', 'water']:
+        terrain_info = TERRAIN_TYPES.get(target_tile.terrain, {})
+        if not terrain_info.get('passable', True):
             return False
         
         distance = hex_map.hex_distance(self.tile_q, self.tile_r, target_q, target_r)

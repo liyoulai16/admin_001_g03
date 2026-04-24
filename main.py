@@ -8,7 +8,8 @@ from config import (
     BUILDING_INFO, SELECTED_COLOR, GAME_STATES, UI_COLORS,
     TERRAIN_DECORATION_COLORS, BUILDING_DETAIL_COLORS, UNIT_DETAIL_COLORS,
     ZOOM_CONFIG, EDGE_SCROLL_CONFIG,
-    UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR
+    UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR,
+    EXPAND_TERRITORY_COST, TERRAIN_TYPES
 )
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
@@ -382,41 +383,62 @@ class Game:
             return
         
         current_player = self.get_current_player()
-        neighbors = self.hex_map.get_neighbors(self.selected_tile.q, self.selected_tile.r)
+        target_tile = self.selected_tile
         
-        expanded = False
+        if builder.expanded_territory_this_turn:
+            self.add_message(self._get_msg('msg_already_expanded_this_turn'))
+            return
+        
+        if target_tile.owner == current_player:
+            self.add_message(self._get_msg('msg_already_own_territory'))
+            return
+        
+        terrain_info = TERRAIN_TYPES.get(target_tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            self.add_message(self._get_msg('msg_cannot_expand_impassable'))
+            return
+        
+        neighbors = self.hex_map.get_neighbors(target_tile.q, target_tile.r)
+        has_adjacent_ally = False
         for nq, nr in neighbors:
             neighbor_tile = self.hex_map.get_tile(nq, nr)
-            if neighbor_tile and neighbor_tile.owner != current_player:
-                if neighbor_tile.terrain not in ['mountain', 'water']:
-                    old_owner = neighbor_tile.owner
-                    
-                    if neighbor_tile.owner:
-                        neighbor_tile.owner.tiles_owned -= 1
-                    
-                    neighbor_tile.owner = current_player
-                    current_player.tiles_owned += 1
-                    
-                    unit_name = self.loc.get_unit_name(builder.unit_type)
-                    if old_owner:
-                        msg = f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}"
-                    else:
-                        msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
-                    self.add_message(msg)
-                    
-                    if self.animation_manager:
-                        x, y = self.hex_map.hex_to_pixel(neighbor_tile.q, neighbor_tile.r)
-                        screen_x = x + self.map_offset_x
-                        screen_y = y + self.map_offset_y
-                        self.animation_manager.particle_system.emit(
-                            screen_x, screen_y, current_player.color, count=20, spread=100
-                        )
-                    
-                    expanded = True
-                    break
+            if neighbor_tile and neighbor_tile.owner == current_player:
+                has_adjacent_ally = True
+                break
         
-        if not expanded:
-            self.add_message(self._get_msg('msg_no_territory_to_expand'))
+        if not has_adjacent_ally:
+            self.add_message(self._get_msg('msg_no_adjacent_ally_territory'))
+            return
+        
+        if not current_player.can_afford(EXPAND_TERRITORY_COST):
+            self.add_message(self._get_msg('msg_not_enough_resources'))
+            return
+        
+        if current_player.spend_resources(EXPAND_TERRITORY_COST):
+            old_owner = target_tile.owner
+            
+            if target_tile.owner:
+                target_tile.owner.tiles_owned -= 1
+            
+            target_tile.owner = current_player
+            current_player.tiles_owned += 1
+            
+            builder.expanded_territory_this_turn = True
+            
+            unit_name = self.loc.get_unit_name(builder.unit_type)
+            if old_owner:
+                msg = f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}"
+            else:
+                msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
+            self.add_message(msg)
+            
+            if self.animation_manager:
+                x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+                screen_x = x + self.map_offset_x
+                screen_y = y + self.map_offset_y
+                self.animation_manager.particle_system.emit(
+                    screen_x, screen_y, current_player.color, count=20, spread=100
+                )
     
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
@@ -580,12 +602,13 @@ class Game:
             return
         
         building_info = BUILDING_INFO.get(building_type, {})
-        required_terrain = building_info.get('required_terrain', [])
+        required_feature = building_info.get('required_feature', [])
         
-        if required_terrain:
-            if self.selected_tile.terrain not in required_terrain:
-                terrain_names = ", ".join([self.loc.get_terrain_name(t) for t in required_terrain])
-                self.add_message(f"{self.loc.get_building_name(building_type)} can only be built on {terrain_names}!")
+        if required_feature:
+            if self.selected_tile.feature not in required_feature:
+                from config import FEATURE_NAMES
+                feature_names = ", ".join([FEATURE_NAMES.get(t, t) for t in required_feature])
+                self.add_message(f"{self.loc.get_building_name(building_type)} can only be built on {feature_names}!")
                 return
         
         if building_type not in BUILDING_INFO:
@@ -786,35 +809,44 @@ class Game:
     
     def _draw_terrain_decoration(self, x: float, y: float, tile: HexTile):
         terrain = tile.terrain
+        feature = tile.feature
         decoration_colors = TERRAIN_DECORATION_COLORS.get(terrain, {})
         scale = self.zoom_level
         
-        if terrain == 'forest':
-            tree_dark = decoration_colors.get('tree_dark', (30, 80, 30))
-            tree_light = decoration_colors.get('tree_light', (70, 140, 70))
-            trunk = decoration_colors.get('trunk', (101, 67, 33))
+        if terrain == 'river':
+            wave_dark = decoration_colors.get('wave_dark', (30, 90, 140))
+            wave_light = decoration_colors.get('wave_light', (80, 160, 220))
+            foam = decoration_colors.get('foam', (220, 240, 255))
             
-            trunk_rect = pygame.Rect(x - 2 * scale, y + 5 * scale, 4 * scale, 8 * scale)
-            pygame.draw.rect(self.screen, trunk, trunk_rect)
+            for i in range(4):
+                offset_x = -10 * scale + i * 7 * scale
+                pygame.draw.arc(self.screen, wave_light, 
+                               (x + offset_x, y - 4 * scale, 10 * scale, 5 * scale),
+                               0, math.pi, 1)
             
-            foliage_y = y - 5 * scale
-            pygame.draw.circle(self.screen, tree_dark, (int(x - 5 * scale), int(foliage_y)), int(8 * scale))
-            pygame.draw.circle(self.screen, tree_light, (int(x + 3 * scale), int(foliage_y - 3 * scale)), int(7 * scale))
-            pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(6 * scale))
+            pygame.draw.line(self.screen, wave_dark, 
+                           (x - 15 * scale, y - 2 * scale), (x + 15 * scale, y - 2 * scale), 
+                           int(1 * scale))
+            pygame.draw.line(self.screen, foam, 
+                           (x - 12 * scale, y + 3 * scale), (x + 12 * scale, y + 3 * scale), 
+                           int(1 * scale))
         
-        elif terrain == 'water':
-            wave_dark = decoration_colors.get('wave_dark', (40, 110, 170))
-            wave_light = decoration_colors.get('wave_light', (100, 180, 240))
+        elif terrain == 'lake':
+            wave_dark = decoration_colors.get('wave_dark', (20, 80, 130))
+            wave_light = decoration_colors.get('wave_light', (60, 140, 200))
+            foam = decoration_colors.get('foam', (200, 230, 250))
+            
+            pygame.draw.circle(self.screen, wave_dark, (int(x - 8 * scale), int(y + 2 * scale)), int(2 * scale))
+            pygame.draw.circle(self.screen, wave_light, (int(x + 6 * scale), int(y - 4 * scale)), int(3 * scale))
             
             for i in range(3):
                 offset_x = -8 * scale + i * 8 * scale
                 pygame.draw.arc(self.screen, wave_light, 
-                               (x + offset_x, y - 5 * scale, 12 * scale, 6 * scale),
+                               (x + offset_x, y - 3 * scale, 10 * scale, 5 * scale),
                                0, math.pi, 1)
-            
-            pygame.draw.circle(self.screen, wave_dark, (int(x + 10 * scale), int(y + 5 * scale)), int(3 * scale))
         
         elif terrain == 'mountain':
+            decoration_colors = TERRAIN_DECORATION_COLORS.get('mountain', {})
             rock_dark = decoration_colors.get('rock_dark', (100, 90, 80))
             rock_light = decoration_colors.get('rock_light', (180, 170, 160))
             snow = decoration_colors.get('snow', (250, 250, 255))
@@ -856,6 +888,20 @@ class Game:
             ]
             pygame.draw.polygon(self.screen, grass_dark, hill_points)
             pygame.draw.polygon(self.screen, rock, hill_points, 1)
+        
+        if feature == 'forest':
+            forest_colors = TERRAIN_DECORATION_COLORS.get('forest', {})
+            tree_dark = forest_colors.get('tree_dark', (30, 80, 30))
+            tree_light = forest_colors.get('tree_light', (70, 140, 70))
+            trunk = forest_colors.get('trunk', (101, 67, 33))
+            
+            trunk_rect = pygame.Rect(x - 2 * scale, y + 3 * scale, 4 * scale, 6 * scale)
+            pygame.draw.rect(self.screen, trunk, trunk_rect)
+            
+            foliage_y = y - 5 * scale
+            pygame.draw.circle(self.screen, tree_dark, (int(x - 4 * scale), int(foliage_y)), int(6 * scale))
+            pygame.draw.circle(self.screen, tree_light, (int(x + 2 * scale), int(foliage_y - 2 * scale)), int(5 * scale))
+            pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(4 * scale))
     
     def _handle_edge_scroll(self):
         if self.game_state != GAME_STATES['PLAYING']:

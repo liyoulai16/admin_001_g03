@@ -14,12 +14,53 @@ TEXT_COLOR = (220, 220, 220)
 HIGHLIGHT_COLOR = (100, 200, 255)
 SELECTED_COLOR = (255, 200, 100)
 
+TERRAIN_TYPES = {
+    'plain': {
+        'name': 'Plain',
+        'color': (150, 180, 100),
+        'passable': True,
+    },
+    'hill': {
+        'name': 'Hill',
+        'color': (120, 150, 90),
+        'passable': True,
+    },
+    'mountain': {
+        'name': 'Mountain',
+        'color': (150, 140, 130),
+        'passable': False,
+    },
+    'river': {
+        'name': 'River',
+        'color': (60, 140, 200),
+        'passable': False,
+    },
+    'lake': {
+        'name': 'Lake',
+        'color': (40, 120, 180),
+        'passable': False,
+    },
+}
+
+FEATURE_TYPES = {
+    'forest': {
+        'name': 'Forest',
+        'color': (50, 120, 50),
+    },
+    'none': {
+        'name': 'None',
+        'color': None,
+    },
+}
+
 TERRAIN_COLORS = {
     'plain': (150, 180, 100),
     'forest': (50, 120, 50),
     'mountain': (150, 140, 130),
     'water': (60, 140, 200),
     'hill': (120, 150, 90),
+    'river': (60, 140, 200),
+    'lake': (40, 120, 180),
 }
 
 TERRAIN_DECORATION_COLORS = {
@@ -48,6 +89,16 @@ TERRAIN_DECORATION_COLORS = {
         'grass_dark': (100, 130, 70),
         'grass_light': (140, 170, 110),
         'rock': (120, 110, 100),
+    },
+    'river': {
+        'wave_dark': (30, 90, 140),
+        'wave_light': (80, 160, 220),
+        'foam': (220, 240, 255),
+    },
+    'lake': {
+        'wave_dark': (20, 80, 130),
+        'wave_light': (60, 140, 200),
+        'foam': (200, 230, 250),
     },
 }
 
@@ -119,6 +170,13 @@ TERRAIN_NAMES = {
     'mountain': 'Mountain',
     'water': 'Water',
     'hill': 'Hill',
+    'river': 'River',
+    'lake': 'Lake',
+}
+
+FEATURE_NAMES = {
+    'forest': 'Forest',
+    'none': 'None',
 }
 
 BUILDING_INFO = {
@@ -156,7 +214,7 @@ BUILDING_INFO = {
         'production': {'gold': 0, 'wood': 8, 'food': 0},
         'description': 'Produces wood per turn',
         'can_train': [],
-        'required_terrain': ['forest'],
+        'required_feature': ['forest'],
     },
 }
 
@@ -210,6 +268,12 @@ AI_START_RESOURCES = {
     'gold': 200,
     'wood': 150,
     'food': 100,
+}
+
+EXPAND_TERRITORY_COST = {
+    'gold': 20,
+    'wood': 10,
+    'food': 10,
 }
 
 RESOURCE_ICONS = {
