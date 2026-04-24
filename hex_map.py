@@ -17,6 +17,9 @@ class HexTile:
         self.highlighted = False
         self.reachable = False
         self.attackable = False
+        
+        self.river_from = None
+        self.river_to = None
 
     def get_color(self):
         base_color = TERRAIN_COLORS.get(self.terrain, (150, 150, 150))

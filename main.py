@@ -9,7 +9,7 @@ from config import (
     TERRAIN_DECORATION_COLORS, BUILDING_DETAIL_COLORS, UNIT_DETAIL_COLORS,
     ZOOM_CONFIG, EDGE_SCROLL_CONFIG,
     UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR,
-    EXPAND_TERRITORY_COST, TERRAIN_TYPES
+    EXPAND_TERRITORY_COST, TERRAIN_TYPES, RIVER_COLORS, HEX_DIRECTIONS
 )
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
@@ -813,25 +813,7 @@ class Game:
         decoration_colors = TERRAIN_DECORATION_COLORS.get(terrain, {})
         scale = self.zoom_level
         
-        if terrain == 'river':
-            wave_dark = decoration_colors.get('wave_dark', (30, 90, 140))
-            wave_light = decoration_colors.get('wave_light', (80, 160, 220))
-            foam = decoration_colors.get('foam', (220, 240, 255))
-            
-            for i in range(4):
-                offset_x = -10 * scale + i * 7 * scale
-                pygame.draw.arc(self.screen, wave_light, 
-                               (x + offset_x, y - 4 * scale, 10 * scale, 5 * scale),
-                               0, math.pi, 1)
-            
-            pygame.draw.line(self.screen, wave_dark, 
-                           (x - 15 * scale, y - 2 * scale), (x + 15 * scale, y - 2 * scale), 
-                           int(1 * scale))
-            pygame.draw.line(self.screen, foam, 
-                           (x - 12 * scale, y + 3 * scale), (x + 12 * scale, y + 3 * scale), 
-                           int(1 * scale))
-        
-        elif terrain == 'lake':
+        if terrain == 'lake':
             wave_dark = decoration_colors.get('wave_dark', (20, 80, 130))
             wave_light = decoration_colors.get('wave_light', (60, 140, 200))
             foam = decoration_colors.get('foam', (200, 230, 250))
@@ -889,7 +871,10 @@ class Game:
             pygame.draw.polygon(self.screen, grass_dark, hill_points)
             pygame.draw.polygon(self.screen, rock, hill_points, 1)
         
-        if feature == 'forest':
+        if feature == 'river':
+            self._draw_river_band(x, y, tile, scale)
+        
+        elif feature == 'forest':
             forest_colors = TERRAIN_DECORATION_COLORS.get('forest', {})
             tree_dark = forest_colors.get('tree_dark', (30, 80, 30))
             tree_light = forest_colors.get('tree_light', (70, 140, 70))
@@ -902,6 +887,64 @@ class Game:
             pygame.draw.circle(self.screen, tree_dark, (int(x - 4 * scale), int(foliage_y)), int(6 * scale))
             pygame.draw.circle(self.screen, tree_light, (int(x + 2 * scale), int(foliage_y - 2 * scale)), int(5 * scale))
             pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(4 * scale))
+    
+    def _draw_river_band(self, x: float, y: float, tile: HexTile, scale: float):
+        river_water = RIVER_COLORS.get('water', (60, 140, 200))
+        river_dark = RIVER_COLORS.get('dark_water', (40, 110, 170))
+        river_light = RIVER_COLORS.get('light_water', (100, 180, 240))
+        river_foam = RIVER_COLORS.get('foam', (220, 240, 255))
+        
+        river_width = 8 * scale
+        
+        if tile.river_from is not None and tile.river_to is not None:
+            from_dir = tile.river_from
+            to_dir = tile.river_to
+            
+            from_dx, from_dy = HEX_DIRECTIONS[from_dir]
+            to_dx, to_dy = HEX_DIRECTIONS[to_dir]
+            
+            from_angle = math.atan2(from_dy, from_dx)
+            to_angle = math.atan2(to_dy, to_dx)
+            
+            from_x = x + from_dx * HEX_SIZE * 0.6
+            from_y = y + from_dy * HEX_SIZE * 0.6 * math.sqrt(3) / 2
+            
+            to_x = x + to_dx * HEX_SIZE * 0.6
+            to_y = y + to_dy * HEX_SIZE * 0.6 * math.sqrt(3) / 2
+            
+            perp_dx = -(to_y - from_y)
+            perp_dy = to_x - from_x
+            perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+            if perp_len > 0:
+                perp_dx /= perp_len
+                perp_dy /= perp_len
+            
+            p1x = from_x + perp_dx * river_width / 2
+            p1y = from_y + perp_dy * river_width / 2
+            
+            p2x = from_x - perp_dx * river_width / 2
+            p2y = from_y - perp_dy * river_width / 2
+            
+            p3x = to_x - perp_dx * river_width / 2
+            p3y = to_y - perp_dy * river_width / 2
+            
+            p4x = to_x + perp_dx * river_width / 2
+            p4y = to_y + perp_dy * river_width / 2
+            
+            pygame.draw.polygon(self.screen, river_water, 
+                               [(p1x, p1y), (p2x, p2y), (p3x, p3y), (p4x, p4y)])
+            
+            pygame.draw.polygon(self.screen, river_light, 
+                               [(p1x, p1y), (p2x, p2y), (p3x, p3y), (p4x, p4y)], 1)
+            
+            mid_x = (from_x + to_x) / 2
+            mid_y = (from_y + to_y) / 2
+            
+            pygame.draw.circle(self.screen, river_foam, (int(mid_x), int(mid_y)), int(2 * scale))
+            
+        else:
+            pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
+            pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
     
     def _handle_edge_scroll(self):
         if self.game_state != GAME_STATES['PLAYING']:
