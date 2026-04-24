@@ -109,7 +109,8 @@ class UI:
     
     def draw_action_buttons(self, screen: pygame.Surface, selected_tile: Optional[HexTile], 
                             current_player: Player, 
-                            can_expand_territory: bool = False) -> List[Dict]:
+                            can_expand_territory: bool = False,
+                            can_clear_enemy_tile: bool = False) -> List[Dict]:
         self.buttons = []
         
         button_y = 320
@@ -148,6 +149,17 @@ class UI:
         self._draw_button(screen, return_to_menu_button)
         
         button_y += button_height + 10
+        
+        if can_clear_enemy_tile:
+            clear_button = {
+                'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                'text': self.loc.t('clear_enemy_tile'),
+                'action': 'clear_enemy_tile',
+                'color': (180, 100, 100)
+            }
+            self.buttons.append(clear_button)
+            self._draw_button(screen, clear_button)
+            button_y += button_height + 10
         
         if selected_tile and selected_tile.owner == current_player:
             if selected_tile.builder_unit and selected_tile.builder_unit.can_build:

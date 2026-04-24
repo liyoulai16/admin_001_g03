@@ -405,6 +405,25 @@ class Game:
             return False
         return True
     
+    def _can_clear_enemy_tile(self, tile, current_player):
+        if not tile:
+            return False
+        if not tile.owner:
+            return False
+        if tile.owner == current_player:
+            return False
+        if not tile.unit:
+            return False
+        if tile.unit.owner != current_player:
+            return False
+        if tile.unit.attacked_this_turn:
+            return False
+        if tile.building and tile.building.owner == tile.owner:
+            return False
+        if tile.builder_unit and tile.builder_unit.owner == tile.owner:
+            return False
+        return True
+    
     def expand_territory(self):
         if not self.selected_tile:
             return
@@ -465,6 +484,49 @@ class Game:
                 self.animation_manager.particle_system.emit(
                     screen_x, screen_y, current_player.color, count=20, spread=100
                 )
+    
+    def clear_enemy_tile(self):
+        if not self.selected_tile:
+            return
+        
+        if not self.selected_tile.unit:
+            return
+        
+        military_unit = self.selected_tile.unit
+        if military_unit.owner != self.get_current_player():
+            return
+        
+        if military_unit.attacked_this_turn:
+            return
+        
+        enemy_tile = self.selected_tile
+        current_player = self.get_current_player()
+        
+        if enemy_tile.building and enemy_tile.building.owner == enemy_tile.owner:
+            self.add_message(self._get_msg('msg_cannot_clear_with_building'))
+            return
+        
+        if enemy_tile.builder_unit and enemy_tile.builder_unit.owner == enemy_tile.owner:
+            self.add_message(self._get_msg('msg_cannot_clear_with_builder'))
+            return
+        
+        if enemy_tile.owner:
+            enemy_tile.owner.tiles_owned -= 1
+        
+        enemy_tile.owner = None
+        
+        military_unit.attacked_this_turn = True
+        
+        unit_name = self.loc.get_unit_name(military_unit.unit_type)
+        self.add_message(f"{unit_name} {self._get_msg('msg_cleared_enemy_tile')}")
+        
+        if self.animation_manager:
+            x, y = self.hex_map.hex_to_pixel(enemy_tile.q, enemy_tile.r)
+            screen_x = x * self.zoom_level + self.map_offset_x
+            screen_y = y * self.zoom_level + self.map_offset_y
+            self.animation_manager.particle_system.emit(
+                screen_x, screen_y, (200, 200, 200), count=20, spread=100
+            )
     
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
@@ -805,10 +867,11 @@ class Game:
         
         current_player = self.get_current_player()
         can_expand = self._can_expand_now(self.selected_tile, current_player)
+        can_clear = self._can_clear_enemy_tile(self.selected_tile, current_player)
         
         self.ui.draw_resource_panel(self.screen, current_player, self.turn)
         self.ui.draw_tile_info(self.screen, self.selected_tile)
-        buttons = self.ui.draw_action_buttons(self.screen, self.selected_tile, current_player, can_expand)
+        buttons = self.ui.draw_action_buttons(self.screen, self.selected_tile, current_player, can_expand, can_clear)
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
         turn_indicator = self.ui.font_large.render(
@@ -2199,6 +2262,8 @@ class Game:
                                         self.train_popup.show()
                                 elif action == 'expand_territory':
                                     self.expand_territory()
+                                elif action == 'clear_enemy_tile':
+                                    self.clear_enemy_tile()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:
                                         self.settings_popup.hide()
