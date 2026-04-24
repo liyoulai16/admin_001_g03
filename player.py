@@ -112,6 +112,7 @@ class Unit:
             self.movement = info['movement']
             self.can_build = info.get('can_build', False)
             self.can_expand_territory = info.get('can_expand_territory', False)
+            self.can_settle = info.get('can_settle', False)
         else:
             self.name = unit_type
             self.attack = 10
@@ -121,6 +122,7 @@ class Unit:
             self.movement = 2
             self.can_build = False
             self.can_expand_territory = False
+            self.can_settle = False
     
     def reset_for_new_turn(self):
         self.moved_this_turn = False
@@ -148,6 +150,9 @@ class Unit:
         
         if self.can_build:
             if target_tile.builder_unit:
+                return False
+        elif self.can_settle:
+            if target_tile.settler_unit:
                 return False
         else:
             if target_tile.unit and target_tile.unit.owner == self.owner:

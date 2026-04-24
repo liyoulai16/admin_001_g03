@@ -110,7 +110,9 @@ class UI:
     def draw_action_buttons(self, screen: pygame.Surface, selected_tile: Optional[HexTile], 
                             current_player: Player, 
                             can_expand_territory: bool = False,
-                            can_clear_enemy_tile: bool = False) -> List[Dict]:
+                            can_clear_enemy_tile: bool = False,
+                            can_destroy_building: bool = False,
+                            can_found_town: bool = False) -> List[Dict]:
         self.buttons = []
         
         button_y = 320
@@ -159,6 +161,28 @@ class UI:
             }
             self.buttons.append(clear_button)
             self._draw_button(screen, clear_button)
+            button_y += button_height + 10
+        
+        if can_destroy_building:
+            destroy_button = {
+                'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                'text': self.loc.t('destroy_building'),
+                'action': 'destroy_building',
+                'color': (200, 80, 80)
+            }
+            self.buttons.append(destroy_button)
+            self._draw_button(screen, destroy_button)
+            button_y += button_height + 10
+        
+        if can_found_town:
+            found_button = {
+                'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                'text': self.loc.t('found_town'),
+                'action': 'found_town',
+                'color': (140, 110, 90)
+            }
+            self.buttons.append(found_button)
+            self._draw_button(screen, found_button)
             button_y += button_height + 10
         
         if selected_tile and selected_tile.owner == current_player:

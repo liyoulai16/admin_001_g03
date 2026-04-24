@@ -172,6 +172,12 @@ UNIT_DETAIL_COLORS = {
         'sword': (200, 200, 200),
         'saddle': (80, 60, 40),
     },
+    'settler': {
+        'body': (140, 110, 90),
+        'hat': (200, 180, 140),
+        'flag': (80, 120, 200),
+        'pack': (160, 140, 120),
+    },
 }
 
 TERRAIN_NAMES = {
@@ -195,7 +201,7 @@ BUILDING_INFO = {
         'cost': {'gold': 100, 'wood': 50},
         'production': {'gold': 10, 'wood': 0, 'food': 5},
         'description': 'Produces gold and food per turn',
-        'can_train': ['builder'],
+        'can_train': ['builder', 'settler'],
     },
     'barracks': {
         'name': 'Barracks',
@@ -265,6 +271,16 @@ UNIT_INFO = {
         'health': 80,
         'movement': 4,
         'can_build': False,
+    },
+    'settler': {
+        'name': 'Settler',
+        'cost': {'gold': 50, 'wood': 40, 'food': 30},
+        'attack': 1,
+        'defense': 2,
+        'health': 40,
+        'movement': 2,
+        'can_build': False,
+        'can_settle': True,
     },
 }
 
