@@ -371,21 +371,13 @@ class Game:
         
         self.select_tile(target_tile)
     
-    def _can_expand_tile(self, tile, current_player):
-        if tile.owner == current_player:
-            return False, None
-        
-        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
-        if not terrain_info.get('passable', True):
-            return False, None
-        
+    def _has_adjacent_ally(self, tile, current_player):
         neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
         for nq, nr in neighbors:
             neighbor_tile = self.hex_map.get_tile(nq, nr)
             if neighbor_tile and neighbor_tile.owner == current_player:
-                return True, tile
-        
-        return False, None
+                return True
+        return False
     
     def expand_territory(self):
         if not self.selected_tile:
@@ -405,28 +397,17 @@ class Game:
             self.add_message(self._get_msg('msg_already_expanded_this_turn'))
             return
         
-        target_tile = None
+        if builder_tile.owner == current_player:
+            self.add_message(self._get_msg('msg_cannot_expand_from_own_tile'))
+            return
         
-        if builder_tile.owner != current_player:
-            can_expand, found_tile = self._can_expand_tile(builder_tile, current_player)
-            if can_expand:
-                target_tile = found_tile
+        terrain_info = TERRAIN_TYPES.get(builder_tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            self.add_message(self._get_msg('msg_cannot_expand_impassable'))
+            return
         
-        if target_tile is None:
-            neighbors = self.hex_map.get_neighbors(builder_tile.q, builder_tile.r)
-            for nq, nr in neighbors:
-                neighbor_tile = self.hex_map.get_tile(nq, nr)
-                if neighbor_tile:
-                    can_expand, found_tile = self._can_expand_tile(neighbor_tile, current_player)
-                    if can_expand:
-                        target_tile = found_tile
-                        break
-        
-        if target_tile is None:
-            if builder_tile.owner == current_player:
-                self.add_message(self._get_msg('msg_no_expandable_territory'))
-            else:
-                self.add_message(self._get_msg('msg_no_adjacent_ally_territory'))
+        if not self._has_adjacent_ally(builder_tile, current_player):
+            self.add_message(self._get_msg('msg_no_adjacent_ally_territory'))
             return
         
         if not current_player.can_afford(EXPAND_TERRITORY_COST):
@@ -434,12 +415,12 @@ class Game:
             return
         
         if current_player.spend_resources(EXPAND_TERRITORY_COST):
-            old_owner = target_tile.owner
+            old_owner = builder_tile.owner
             
-            if target_tile.owner:
-                target_tile.owner.tiles_owned -= 1
+            if builder_tile.owner:
+                builder_tile.owner.tiles_owned -= 1
             
-            target_tile.owner = current_player
+            builder_tile.owner = current_player
             current_player.tiles_owned += 1
             
             builder.expanded_territory_this_turn = True
@@ -452,7 +433,7 @@ class Game:
             self.add_message(msg)
             
             if self.animation_manager:
-                x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
+                x, y = self.hex_map.hex_to_pixel(builder_tile.q, builder_tile.r)
                 screen_x = x + self.map_offset_x
                 screen_y = y + self.map_offset_y
                 self.animation_manager.particle_system.emit(
