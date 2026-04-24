@@ -108,7 +108,8 @@ class UI:
             screen.blit(hp_text, (self.panel_x + 20, 295 if tile.building else 245))
     
     def draw_action_buttons(self, screen: pygame.Surface, selected_tile: Optional[HexTile], 
-                            current_player: Player) -> List[Dict]:
+                            current_player: Player, 
+                            can_expand_territory: bool = False) -> List[Dict]:
         self.buttons = []
         
         button_y = 320
@@ -161,17 +162,6 @@ class UI:
                     self._draw_button(screen, build_button)
                     button_y += button_height + 10
             
-            if selected_tile.builder_unit and selected_tile.builder_unit.can_expand_territory:
-                expand_button = {
-                    'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
-                    'text': self.loc.t('expand_territory'),
-                    'action': 'expand_territory',
-                    'color': (100, 150, 100)
-                }
-                self.buttons.append(expand_button)
-                self._draw_button(screen, expand_button)
-                button_y += button_height + 10
-            
             if selected_tile.building:
                 from config import BUILDING_INFO, UNIT_INFO
                 building_type = selected_tile.building.building_type
@@ -218,6 +208,17 @@ class UI:
                 info_text = f"{unit_name}: {move_text}, {attack_text}"
                 info_surface = self.font_small.render(info_text, True, TEXT_COLOR)
                 screen.blit(info_surface, (self.panel_x + 10, button_y + 5))
+        
+        if can_expand_territory:
+            expand_button = {
+                'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                'text': self.loc.t('expand_territory'),
+                'action': 'expand_territory',
+                'color': (100, 150, 100)
+            }
+            self.buttons.append(expand_button)
+            self._draw_button(screen, expand_button)
+            button_y += button_height + 10
         
         return self.buttons
     
