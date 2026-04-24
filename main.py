@@ -723,12 +723,7 @@ class Game:
         self._handle_edge_scroll()
         
         if self.hex_map:
-            sorted_tiles = sorted(
-                self.hex_map.tiles.items(),
-                key=lambda item: self._get_tile_depth(item[1].q, item[1].r)
-            )
-            
-            for (q, r), tile in sorted_tiles:
+            for (q, r), tile in self.hex_map.tiles.items():
                 x, y = self.hex_map.hex_to_pixel(q, r)
                 screen_x = x * self.zoom_level + self.map_offset_x
                 screen_y = y * self.zoom_level + self.map_offset_y
@@ -738,7 +733,7 @@ class Game:
                 if screen_y < -HEX_SIZE * self.zoom_level * 2 or screen_y > SCREEN_HEIGHT + HEX_SIZE * self.zoom_level * 2:
                     continue
                 
-                corners = self._get_25d_hex_corners(screen_x, screen_y)
+                corners = self._get_scaled_hex_corners(screen_x, screen_y)
                 
                 tile_scale = 1.0
                 if self.animation_manager and (q, r) in self.animation_manager.tile_animations:
@@ -746,39 +741,37 @@ class Game:
                 
                 if tile_scale != 1.0:
                     scaled_corners = []
-                    center_x = sum(c[0] for c in corners) / 6
-                    center_y = sum(c[1] for c in corners) / 6
                     for cx, cy in corners:
-                        dx = cx - center_x
-                        dy = cy - center_y
+                        dx = cx - screen_x
+                        dy = cy - screen_y
                         scaled_corners.append((
-                            center_x + dx * tile_scale,
-                            center_y + dy * tile_scale
+                            screen_x + dx * tile_scale,
+                            screen_y + dy * tile_scale
                         ))
                     corners = scaled_corners
                 
-                self._draw_25d_tile_with_shadow(screen_x, screen_y, corners, tile)
+                self._draw_tile_simple(screen_x, screen_y, corners, tile)
                 
                 self._draw_terrain_decoration(screen_x, screen_y, tile)
                 
                 if tile.building:
-                    self._draw_25d_building(screen_x, screen_y, tile.building)
+                    self.draw_building_icon(screen_x, screen_y, tile.building)
                 
                 if tile.unit:
                     unit_id = id(tile.unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self._draw_25d_unit(anim_pos[0], anim_pos[1] + 5 * self.zoom_level, tile.unit)
+                        self.draw_unit_icon(anim_pos[0], anim_pos[1] + 5 * self.zoom_level, tile.unit)
                     else:
-                        self._draw_25d_unit(screen_x, screen_y + 5 * self.zoom_level, tile.unit)
+                        self.draw_unit_icon(screen_x, screen_y + 5 * self.zoom_level, tile.unit)
                 
                 if tile.builder_unit:
                     unit_id = id(tile.builder_unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self._draw_25d_unit(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
+                        self.draw_unit_icon(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
                     else:
-                        self._draw_25d_unit(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
+                        self.draw_unit_icon(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
         
         if self.animation_manager:
             self.animation_manager.particle_system.draw(self.screen)
@@ -813,97 +806,38 @@ class Game:
             corners.append((x, y))
         return corners
     
-    def _get_tile_depth(self, q: int, r: int) -> float:
-        return r + q * 0.5
-    
-    def _get_25d_hex_corners(self, center_x: float, center_y: float) -> List[Tuple[float, float]]:
-        corners = []
-        scaled_hex_size = HEX_SIZE * self.zoom_level
-        elevation_offset = 2 * self.zoom_level
-        
-        for i in range(6):
-            angle = math.pi / 3 * i
-            x = center_x + scaled_hex_size * math.cos(angle)
-            y = center_y + scaled_hex_size * math.sin(angle) - elevation_offset
-            corners.append((x, y))
-        return corners
-    
-    def _draw_25d_tile_with_shadow(self, screen_x: float, screen_y: float, corners: List[Tuple[float, float]], tile: HexTile):
-        scale = self.zoom_level
-        
-        shadow_offset_x = 3 * scale
-        shadow_offset_y = 5 * scale
-        shadow_corners = []
-        for cx, cy in corners:
-            shadow_corners.append((cx + shadow_offset_x, cy + shadow_offset_y))
-        
-        shadow_color = (10, 20, 30, 100)
-        shadow_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.polygon(shadow_surface, shadow_color, shadow_corners)
-        self.screen.blit(shadow_surface, (0, 0))
-        
+    def _draw_tile_simple(self, screen_x: float, screen_y: float, corners: List[Tuple[float, float]], tile: HexTile):
         base_color = tile.get_color()
         
-        highlight_color = (
-            min(255, base_color[0] + 30),
-            min(255, base_color[1] + 30),
-            min(255, base_color[2] + 30)
-        )
-        
-        shadow_color_3d = (
-            max(0, base_color[0] - 40),
-            max(0, base_color[1] - 40),
-            max(0, base_color[2] - 40)
-        )
-        
-        pygame.draw.polygon(self.screen, base_color, corners)
-        
-        top_corners = []
-        elevation_height = 3 * scale
-        for cx, cy in corners:
-            top_corners.append((cx, cy - elevation_height))
-        
-        pygame.draw.polygon(self.screen, highlight_color, top_corners)
-        
-        for i in range(6):
-            side_corners = [
-                corners[i],
-                corners[(i + 1) % 6],
-                top_corners[(i + 1) % 6],
-                top_corners[i]
-            ]
-            
-            if i in [0, 1, 2]:
-                side_color = highlight_color
-            else:
-                side_color = shadow_color_3d
-            
-            pygame.draw.polygon(self.screen, side_color, side_corners)
-        
-        pygame.draw.polygon(self.screen, tile.get_border_color(), top_corners, 1)
-    
-    def _draw_25d_building(self, x: float, y: float, building):
         scale = self.zoom_level
-        color = building.owner.color
-        building_type = building.building_type
+        shadow_offset = 2 * scale
+        shadow_corners = [(cx + shadow_offset, cy + shadow_offset) for cx, cy in corners]
         
-        elevation_offset = 3 * scale
+        shadow_color = (max(0, base_color[0] - 60), max(0, base_color[1] - 60), max(0, base_color[2] - 60))
+        pygame.draw.polygon(self.screen, shadow_color, shadow_corners)
         
-        if building_type == 'town':
-            self._draw_25d_town(x, y - elevation_offset, color, scale)
-        elif building_type == 'barracks':
-            self._draw_25d_barracks(x, y - elevation_offset, color, scale)
-        elif building_type == 'farm':
-            self._draw_25d_farm(x, y - elevation_offset, color, scale)
-        elif building_type == 'tower':
-            self._draw_25d_tower(x, y - elevation_offset, color, scale)
-        elif building_type == 'lumbermill':
-            self._draw_25d_lumbermill(x, y - elevation_offset, color, scale)
-        else:
-            self._draw_25d_default_building(x, y - elevation_offset, color, scale)
-    
-    def _draw_25d_unit(self, x: float, y: float, unit):
-        scale = self.zoom_level
+        highlight_corners = [(cx, cy - shadow_offset) for cx, cy in corners]
+        highlight_color = (min(255, base_color[0] + 20), min(255, base_color[1] + 20), min(255, base_color[2] + 20))
+        
+        side_corners_right = [
+            corners[0],
+            corners[1],
+            highlight_corners[1],
+            highlight_corners[0]
+        ]
+        pygame.draw.polygon(self.screen, highlight_color, side_corners_right)
+        
+        side_corners_front = [
+            corners[1],
+            corners[2],
+            highlight_corners[2],
+            highlight_corners[1]
+        ]
+        pygame.draw.polygon(self.screen, base_color, side_corners_front)
+        
+        pygame.draw.polygon(self.screen, highlight_color, highlight_corners)
+        
+        pygame.draw.polygon(self.screen, tile.get_border_color(), highlight_corners, 1)
         elevation_offset = 5 * scale
         base_y = y - elevation_offset
         
@@ -1323,36 +1257,18 @@ class Game:
             pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(4 * scale))
     
     def _draw_river_band(self, x: float, y: float, tile: HexTile, scale: float):
-        river_water = RIVER_COLORS.get('water', (60, 140, 200))
-        river_dark = RIVER_COLORS.get('dark_water', (40, 110, 170))
-        river_light = RIVER_COLORS.get('light_water', (100, 180, 240))
-        river_foam = RIVER_COLORS.get('foam', (220, 240, 255))
+        river_water = RIVER_COLORS.get('water', (80, 160, 230))
+        river_light = RIVER_COLORS.get('light_water', (120, 200, 255))
+        river_foam = RIVER_COLORS.get('foam', (240, 250, 255))
         
         river_width = 8 * scale
+        num_segments = 15
         
-        def get_edge_center(center_x, center_y, direction, hex_size):
+        def get_edge_center_exact(center_x, center_y, direction, hex_size):
             angle = math.pi / 3 * direction
             edge_x = center_x + hex_size * math.cos(angle)
             edge_y = center_y + hex_size * math.sin(angle)
             return edge_x, edge_y
-        
-        def quadratic_bezier(p0, p1, p2, t):
-            x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t ** 2 * p2[0]
-            y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t ** 2 * p2[1]
-            return x, y
-        
-        def cubic_bezier(p0, p1, p2, p3, t):
-            x = (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * p1[0] + 3 * (1 - t) * t ** 2 * p2[0] + t ** 3 * p3[0]
-            y = (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * p1[1] + 3 * (1 - t) * t ** 2 * p2[1] + t ** 3 * p3[1]
-            return x, y
-        
-        def get_offset_point(point, direction_vector, offset):
-            dx, dy = direction_vector
-            length = math.sqrt(dx * dx + dy * dy)
-            if length > 0:
-                dx /= length
-                dy /= length
-            return (point[0] + dx * offset, point[1] + dy * offset)
         
         def get_perpendicular(dx, dy):
             return -dy, dx
@@ -1361,132 +1277,88 @@ class Game:
             from_dir = tile.river_from
             to_dir = tile.river_to
             
-            from_point = get_edge_center(x, y, from_dir, HEX_SIZE * 0.9)
-            to_point = get_edge_center(x, y, to_dir, HEX_SIZE * 0.9)
+            scaled_hex_size = HEX_SIZE * self.zoom_level
             
-            dir_diff = (to_dir - from_dir) % 6
-            is_opposite = dir_diff == 3
+            from_point = get_edge_center_exact(x, y, from_dir, scaled_hex_size)
+            to_point = get_edge_center_exact(x, y, to_dir, scaled_hex_size)
             
-            if is_opposite:
+            opposite_dir = (from_dir + 3) % 6
+            is_straight = to_dir == opposite_dir
+            
+            curve_points = []
+            
+            if is_straight:
                 from_dx, from_dy = HEX_DIRECTIONS[from_dir]
                 to_dx, to_dy = HEX_DIRECTIONS[to_dir]
                 
-                mid_point = ((from_point[0] + to_point[0]) / 2, (from_point[1] + to_point[1]) / 2)
+                cp1 = (from_point[0] - from_dx * scaled_hex_size * 0.2, 
+                       from_point[1] - from_dy * scaled_hex_size * 0.2)
+                cp2 = (to_point[0] - to_dx * scaled_hex_size * 0.2, 
+                       to_point[1] - to_dy * scaled_hex_size * 0.2)
                 
-                cp1 = (from_point[0] - from_dx * HEX_SIZE * 0.3, from_point[1] - from_dy * HEX_SIZE * 0.3)
-                cp2 = (to_point[0] - to_dx * HEX_SIZE * 0.3, to_point[1] - to_dy * HEX_SIZE * 0.3)
-                
-                curve_points = []
-                for t in range(0, 21):
-                    t_val = t / 20.0
-                    pt = cubic_bezier(from_point, cp1, cp2, to_point, t_val)
-                    curve_points.append(pt)
-                
-                perp_dx, perp_dy = get_perpendicular(to_point[0] - from_point[0], to_point[1] - from_point[1])
-                perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                if perp_len > 0:
-                    perp_dx /= perp_len
-                    perp_dy /= perp_len
-                
-                upper_edge = []
-                lower_edge = []
-                
-                for i, pt in enumerate(curve_points):
-                    if i < len(curve_points) - 1:
-                        next_pt = curve_points[i + 1]
-                        tangent_dx = next_pt[0] - pt[0]
-                        tangent_dy = next_pt[1] - pt[1]
-                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                        if perp_len > 0:
-                            perp_dx /= perp_len
-                            perp_dy /= perp_len
-                    else:
-                        prev_pt = curve_points[i - 1]
-                        tangent_dx = pt[0] - prev_pt[0]
-                        tangent_dy = pt[1] - prev_pt[1]
-                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                        if perp_len > 0:
-                            perp_dx /= perp_len
-                            perp_dy /= perp_len
-                    
-                    upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
-                    lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
-                
-                full_polygon = upper_edge + list(reversed(lower_edge))
-                
-                pygame.draw.polygon(self.screen, river_water, full_polygon)
-                
-                for i in range(len(upper_edge) - 1):
-                    pygame.draw.aaline(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
-                    pygame.draw.aaline(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
-                
-                pygame.draw.circle(self.screen, river_foam, (int(mid_point[0]), int(mid_point[1])), int(2 * scale))
-                
+                for t in range(num_segments + 1):
+                    t_val = t / num_segments
+                    mt = 1 - t_val
+                    pt_x = mt**3 * from_point[0] + 3 * mt**2 * t_val * cp1[0] + 3 * mt * t_val**2 * cp2[0] + t_val**3 * to_point[0]
+                    pt_y = mt**3 * from_point[1] + 3 * mt**2 * t_val * cp1[1] + 3 * mt * t_val**2 * cp2[1] + t_val**3 * to_point[1]
+                    curve_points.append((pt_x, pt_y))
             else:
                 from_dx, from_dy = HEX_DIRECTIONS[from_dir]
                 to_dx, to_dy = HEX_DIRECTIONS[to_dir]
                 
-                control_point_in = (
-                    x - from_dx * HEX_SIZE * 0.5,
-                    y - from_dy * HEX_SIZE * 0.5
-                )
-                control_point_out = (
-                    x - to_dx * HEX_SIZE * 0.5,
-                    y - to_dy * HEX_SIZE * 0.5
-                )
+                in_tangent_len = scaled_hex_size * 0.4
+                out_tangent_len = scaled_hex_size * 0.4
                 
-                mid_control = (
-                    (control_point_in[0] + control_point_out[0]) / 2,
-                    (control_point_in[1] + control_point_out[1]) / 2
-                )
+                cp1 = (from_point[0] - from_dx * in_tangent_len, 
+                       from_point[1] - from_dy * in_tangent_len)
+                cp2 = (to_point[0] - to_dx * out_tangent_len, 
+                       to_point[1] - to_dy * out_tangent_len)
                 
-                curve_center = []
-                for t in range(0, 31):
-                    t_val = t / 30.0
-                    if t_val < 0.5:
-                        pt = quadratic_bezier(from_point, control_point_in, mid_control, t_val * 2)
-                    else:
-                        pt = quadratic_bezier(mid_control, control_point_out, to_point, (t_val - 0.5) * 2)
-                    curve_center.append(pt)
+                for t in range(num_segments + 1):
+                    t_val = t / num_segments
+                    mt = 1 - t_val
+                    pt_x = mt**3 * from_point[0] + 3 * mt**2 * t_val * cp1[0] + 3 * mt * t_val**2 * cp2[0] + t_val**3 * to_point[0]
+                    pt_y = mt**3 * from_point[1] + 3 * mt**2 * t_val * cp1[1] + 3 * mt * t_val**2 * cp2[1] + t_val**3 * to_point[1]
+                    curve_points.append((pt_x, pt_y))
+            
+            upper_edge = []
+            lower_edge = []
+            
+            for i, pt in enumerate(curve_points):
+                if i < len(curve_points) - 1:
+                    next_pt = curve_points[i + 1]
+                    tangent_dx = next_pt[0] - pt[0]
+                    tangent_dy = next_pt[1] - pt[1]
+                    perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                    perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                    if perp_len > 0:
+                        perp_dx /= perp_len
+                        perp_dy /= perp_len
+                else:
+                    prev_pt = curve_points[i - 1]
+                    tangent_dx = pt[0] - prev_pt[0]
+                    tangent_dy = pt[1] - prev_pt[1]
+                    perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                    perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                    if perp_len > 0:
+                        perp_dx /= perp_len
+                        perp_dy /= perp_len
                 
-                upper_edge = []
-                lower_edge = []
-                
-                for i, pt in enumerate(curve_center):
-                    if i < len(curve_center) - 1:
-                        next_pt = curve_center[i + 1]
-                        tangent_dx = next_pt[0] - pt[0]
-                        tangent_dy = next_pt[1] - pt[1]
-                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                        if perp_len > 0:
-                            perp_dx /= perp_len
-                            perp_dy /= perp_len
-                    else:
-                        prev_pt = curve_center[i - 1]
-                        tangent_dx = pt[0] - prev_pt[0]
-                        tangent_dy = pt[1] - prev_pt[1]
-                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                        if perp_len > 0:
-                            perp_dx /= perp_len
-                            perp_dy /= perp_len
-                    
-                    upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
-                    lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
-                
-                full_polygon = upper_edge + list(reversed(lower_edge))
-                
-                pygame.draw.polygon(self.screen, river_water, full_polygon)
-                
-                for i in range(len(upper_edge) - 1):
-                    pygame.draw.aaline(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
-                    pygame.draw.aaline(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
-                
-                pygame.draw.circle(self.screen, river_foam, (int(mid_control[0]), int(mid_control[1])), int(2 * scale))
-                
+                upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
+                lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
+            
+            full_polygon = upper_edge + list(reversed(lower_edge))
+            
+            pygame.draw.polygon(self.screen, river_water, full_polygon)
+            
+            for i in range(len(upper_edge) - 1):
+                pygame.draw.line(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
+                pygame.draw.line(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
+            
+            if len(curve_points) >= 3:
+                mid_idx = len(curve_points) // 2
+                mid_x, mid_y = curve_points[mid_idx]
+                pygame.draw.circle(self.screen, river_foam, (int(mid_x), int(mid_y)), int(2 * scale))
         else:
             pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
             pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
