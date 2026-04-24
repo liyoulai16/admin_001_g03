@@ -68,6 +68,12 @@ class Game:
             SCREEN_WIDTH - 300, SCREEN_HEIGHT - 350, 280, 320
         )
         
+        self.tile_detail_panel_visible = False
+        self.tile_detail_tile: Optional[HexTile] = None
+        self.tile_detail_panel_rect = pygame.Rect(
+            SCREEN_WIDTH - 300, SCREEN_HEIGHT - 450, 280, 420
+        )
+        
         self.unit_selection_pending: bool = False
         self.unit_selection_tile: Optional[HexTile] = None
         self.unit_selection_buttons: List[Dict] = []
@@ -815,6 +821,9 @@ class Game:
         if self.unit_detail_panel_visible and self.selected_unit:
             self._draw_unit_detail_panel(self.screen)
         
+        if self.tile_detail_panel_visible and self.tile_detail_tile:
+            self._draw_tile_detail_panel(self.screen)
+        
         self._draw_popups()
     
     def _get_scaled_hex_corners(self, center_x: float, center_y: float) -> List[Tuple[float, float]]:
@@ -1225,15 +1234,66 @@ class Game:
         
         elif terrain == 'hill':
             grass_dark = decoration_colors.get('grass_dark', (100, 130, 70))
+            grass_medium = (
+                min(255, grass_dark[0] + 15),
+                min(255, grass_dark[1] + 15),
+                min(255, grass_dark[2] + 15)
+            )
+            grass_light = (
+                min(255, grass_dark[0] + 30),
+                min(255, grass_dark[1] + 30),
+                min(255, grass_dark[2] + 30)
+            )
             rock = decoration_colors.get('rock', (120, 110, 100))
+            rock_light = (
+                min(255, rock[0] + 20),
+                min(255, rock[1] + 20),
+                min(255, rock[2] + 20)
+            )
             
-            hill_points = [
-                (x, y - 8 * scale),
-                (x - 10 * scale, y + 5 * scale),
-                (x + 10 * scale, y + 5 * scale)
+            main_hill = [
+                (x, y - 10 * scale),
+                (x - 12 * scale, y + 4 * scale),
+                (x + 12 * scale, y + 4 * scale)
             ]
-            pygame.draw.polygon(self.screen, grass_dark, hill_points)
-            pygame.draw.polygon(self.screen, rock, hill_points, 1)
+            pygame.draw.polygon(self.screen, grass_dark, main_hill)
+            
+            highlight = [
+                (x, y - 10 * scale),
+                (x - 3 * scale, y - 2 * scale),
+                (x + 3 * scale, y - 2 * scale)
+            ]
+            pygame.draw.polygon(self.screen, grass_medium, highlight)
+            
+            peak_highlight = [
+                (x, y - 10 * scale),
+                (x - 1 * scale, y - 5 * scale),
+                (x + 1 * scale, y - 5 * scale)
+            ]
+            pygame.draw.polygon(self.screen, grass_light, peak_highlight)
+            
+            rock_outcrop1 = [
+                (x - 4 * scale, y),
+                (x - 6 * scale, y + 3 * scale),
+                (x - 2 * scale, y + 3 * scale)
+            ]
+            pygame.draw.polygon(self.screen, rock, rock_outcrop1)
+            pygame.draw.polygon(self.screen, rock_light, rock_outcrop1, 1)
+            
+            rock_outcrop2 = [
+                (x + 5 * scale, y + 1 * scale),
+                (x + 3 * scale, y + 4 * scale),
+                (x + 7 * scale, y + 4 * scale)
+            ]
+            pygame.draw.polygon(self.screen, rock, rock_outcrop2)
+            pygame.draw.polygon(self.screen, rock_light, rock_outcrop2, 1)
+            
+            for i in range(3):
+                grass_x = x + (-6 + i * 6) * scale
+                pygame.draw.line(self.screen, grass_medium,
+                                (grass_x, y + 2 * scale), (grass_x, y - 2 * scale), int(1 * scale))
+            
+            pygame.draw.polygon(self.screen, rock_light, main_hill, 1)
         
         if feature == 'river':
             self._draw_river_band(x, y, tile, scale)
@@ -1252,6 +1312,52 @@ class Game:
             pygame.draw.circle(self.screen, tree_light, (int(x + 2 * scale), int(foliage_y - 2 * scale)), int(5 * scale))
             pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(4 * scale))
     
+    def _draw_river_polygon(self, curve_points, river_width, river_water, river_light, river_foam, scale):
+        if len(curve_points) < 2:
+            return
+        
+        def get_perpendicular(dx, dy):
+            return -dy, dx
+        
+        upper_edge = []
+        lower_edge = []
+        
+        for i, pt in enumerate(curve_points):
+            if i < len(curve_points) - 1:
+                next_pt = curve_points[i + 1]
+                tangent_dx = next_pt[0] - pt[0]
+                tangent_dy = next_pt[1] - pt[1]
+                perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                if perp_len > 0:
+                    perp_dx /= perp_len
+                    perp_dy /= perp_len
+            else:
+                prev_pt = curve_points[i - 1]
+                tangent_dx = pt[0] - prev_pt[0]
+                tangent_dy = pt[1] - prev_pt[1]
+                perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                if perp_len > 0:
+                    perp_dx /= perp_len
+                    perp_dy /= perp_len
+            
+            upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
+            lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
+        
+        full_polygon = upper_edge + list(reversed(lower_edge))
+        
+        pygame.draw.polygon(self.screen, river_water, full_polygon)
+        
+        for i in range(len(upper_edge) - 1):
+            pygame.draw.line(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
+            pygame.draw.line(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
+        
+        if len(curve_points) >= 3:
+            mid_idx = len(curve_points) // 2
+            mid_x, mid_y = curve_points[mid_idx]
+            pygame.draw.circle(self.screen, river_foam, (int(mid_x), int(mid_y)), int(2 * scale))
+    
     def _draw_river_band(self, x: float, y: float, tile: HexTile, scale: float):
         river_water = RIVER_COLORS.get('water', (80, 160, 230))
         river_light = RIVER_COLORS.get('light_water', (120, 200, 255))
@@ -1259,6 +1365,7 @@ class Game:
         
         river_width = 8 * scale
         num_segments = 15
+        scaled_hex_size = HEX_SIZE * self.zoom_level
         
         def get_edge_center_exact(center_x, center_y, direction, hex_size):
             angle = math.pi / 3 * direction
@@ -1266,14 +1373,9 @@ class Game:
             edge_y = center_y + hex_size * math.sin(angle)
             return edge_x, edge_y
         
-        def get_perpendicular(dx, dy):
-            return -dy, dx
-        
         if tile.river_from is not None and tile.river_to is not None:
             from_dir = tile.river_from
             to_dir = tile.river_to
-            
-            scaled_hex_size = HEX_SIZE * self.zoom_level
             
             from_point = get_edge_center_exact(x, y, from_dir, scaled_hex_size)
             to_point = get_edge_center_exact(x, y, to_dir, scaled_hex_size)
@@ -1317,44 +1419,42 @@ class Game:
                     pt_y = mt**3 * from_point[1] + 3 * mt**2 * t_val * cp1[1] + 3 * mt * t_val**2 * cp2[1] + t_val**3 * to_point[1]
                     curve_points.append((pt_x, pt_y))
             
-            upper_edge = []
-            lower_edge = []
+            self._draw_river_polygon(curve_points, river_width, river_water, river_light, river_foam, scale)
+        
+        elif tile.river_from is not None:
+            from_dir = tile.river_from
+            from_point = get_edge_center_exact(x, y, from_dir, scaled_hex_size)
+            center_point = (x, y)
             
-            for i, pt in enumerate(curve_points):
-                if i < len(curve_points) - 1:
-                    next_pt = curve_points[i + 1]
-                    tangent_dx = next_pt[0] - pt[0]
-                    tangent_dy = next_pt[1] - pt[1]
-                    perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                    perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                    if perp_len > 0:
-                        perp_dx /= perp_len
-                        perp_dy /= perp_len
-                else:
-                    prev_pt = curve_points[i - 1]
-                    tangent_dx = pt[0] - prev_pt[0]
-                    tangent_dy = pt[1] - prev_pt[1]
-                    perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
-                    perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-                    if perp_len > 0:
-                        perp_dx /= perp_len
-                        perp_dy /= perp_len
-                
-                upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
-                lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
+            curve_points = []
+            for t in range(num_segments + 1):
+                t_val = t / num_segments
+                pt_x = from_point[0] + (center_point[0] - from_point[0]) * t_val
+                pt_y = from_point[1] + (center_point[1] - from_point[1]) * t_val
+                curve_points.append((pt_x, pt_y))
             
-            full_polygon = upper_edge + list(reversed(lower_edge))
+            self._draw_river_polygon(curve_points, river_width, river_water, river_light, river_foam, scale)
             
-            pygame.draw.polygon(self.screen, river_water, full_polygon)
+            pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
+            pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
+        
+        elif tile.river_to is not None:
+            to_dir = tile.river_to
+            to_point = get_edge_center_exact(x, y, to_dir, scaled_hex_size)
+            center_point = (x, y)
             
-            for i in range(len(upper_edge) - 1):
-                pygame.draw.line(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
-                pygame.draw.line(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
+            curve_points = []
+            for t in range(num_segments + 1):
+                t_val = t / num_segments
+                pt_x = center_point[0] + (to_point[0] - center_point[0]) * t_val
+                pt_y = center_point[1] + (to_point[1] - center_point[1]) * t_val
+                curve_points.append((pt_x, pt_y))
             
-            if len(curve_points) >= 3:
-                mid_idx = len(curve_points) // 2
-                mid_x, mid_y = curve_points[mid_idx]
-                pygame.draw.circle(self.screen, river_foam, (int(mid_x), int(mid_y)), int(2 * scale))
+            self._draw_river_polygon(curve_points, river_width, river_water, river_light, river_foam, scale)
+            
+            pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
+            pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
+        
         else:
             pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
             pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
@@ -1463,6 +1563,115 @@ class Game:
         screen.blit(close_text, text_rect)
         
         self.unit_detail_close_button = close_button_rect
+    
+    def _draw_tile_detail_panel(self, screen: pygame.Surface):
+        if not self.tile_detail_tile:
+            return
+        
+        tile = self.tile_detail_tile
+        panel_rect = self.tile_detail_panel_rect
+        
+        pygame.draw.rect(screen, UI_PANEL_COLOR, panel_rect)
+        pygame.draw.rect(screen, HIGHLIGHT_COLOR, panel_rect, 2)
+        
+        y_offset = panel_rect.y + 10
+        x_offset = panel_rect.x + 15
+        
+        title = self.ui.font_large.render(self.loc.t('tile_info'), True, HIGHLIGHT_COLOR)
+        screen.blit(title, (x_offset, y_offset))
+        y_offset += 30
+        
+        coords_text = self.ui.font_medium.render(
+            f"{self.loc.t('coordinates')}: ({tile.q}, {tile.r})", 
+            True, TEXT_COLOR
+        )
+        screen.blit(coords_text, (x_offset, y_offset))
+        y_offset += 25
+        
+        terrain_name = self.loc.get_terrain_name(tile.terrain)
+        terrain_text = self.ui.font_medium.render(
+            f"{self.loc.t('terrain')}: {terrain_name}", 
+            True, TERRAIN_COLORS.get(tile.terrain, TEXT_COLOR)
+        )
+        screen.blit(terrain_text, (x_offset, y_offset))
+        y_offset += 25
+        
+        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
+        passable_text = self.ui.font_small.render(
+            f"  {self.loc.t('passable')}: {self.loc.t('yes') if terrain_info.get('passable', True) else self.loc.t('no')}", 
+            True, TEXT_COLOR
+        )
+        screen.blit(passable_text, (x_offset, y_offset))
+        y_offset += 20
+        
+        defense_text = self.ui.font_small.render(
+            f"  {self.loc.t('defense_bonus')}: +{terrain_info.get('defense_bonus', 0)}", 
+            True, TEXT_COLOR
+        )
+        screen.blit(defense_text, (x_offset, y_offset))
+        y_offset += 25
+        
+        feature_name = self.loc.get_feature_name(tile.feature)
+        feature_text = self.ui.font_medium.render(
+            f"{self.loc.t('feature')}: {feature_name}", 
+            True, TEXT_COLOR
+        )
+        screen.blit(feature_text, (x_offset, y_offset))
+        y_offset += 25
+        
+        if tile.feature == 'river':
+            river_info_text = ""
+            if tile.river_from is not None and tile.river_to is not None:
+                river_info_text = self.loc.t('river_through')
+            elif tile.river_from is not None:
+                river_info_text = self.loc.t('river_end')
+            elif tile.river_to is not None:
+                river_info_text = self.loc.t('river_start')
+            
+            if river_info_text:
+                info_text = self.ui.font_small.render(f"  {river_info_text}", True, TEXT_COLOR)
+                screen.blit(info_text, (x_offset, y_offset))
+                y_offset += 20
+        
+        y_offset += 5
+        owner_title = self.ui.font_medium.render(f"{self.loc.t('owner')}:", True, TEXT_COLOR)
+        screen.blit(owner_title, (x_offset, y_offset))
+        y_offset += 25
+        
+        if tile.owner:
+            owner_text = self.ui.font_small.render(f"  {tile.owner.name}", True, tile.owner.color)
+            screen.blit(owner_text, (x_offset, y_offset))
+            y_offset += 20
+            
+            tiles_text = self.ui.font_small.render(
+                f"  {self.loc.t('tiles_owned')}: {tile.owner.tiles_owned}", 
+                True, TEXT_COLOR
+            )
+            screen.blit(tiles_text, (x_offset, y_offset))
+        else:
+            owner_text = self.ui.font_small.render(f"  {self.loc.t('neutral')}", True, (150, 150, 150))
+            screen.blit(owner_text, (x_offset, y_offset))
+        
+        y_offset += 25
+        if tile.building:
+            building_name = self.loc.get_building_name(tile.building.building_type)
+            building_text = self.ui.font_medium.render(
+                f"{self.loc.t('building')}: {building_name}", 
+                True, tile.building.owner.color
+            )
+            screen.blit(building_text, (x_offset, y_offset))
+        
+        close_button_rect = pygame.Rect(
+            panel_rect.right - 30, panel_rect.y + 5, 25, 25
+        )
+        pygame.draw.rect(screen, (200, 80, 80), close_button_rect)
+        pygame.draw.rect(screen, (255, 255, 255), close_button_rect, 1)
+        
+        close_text = self.ui.font_small.render("X", True, (255, 255, 255))
+        text_rect = close_text.get_rect(center=close_button_rect.center)
+        screen.blit(close_text, text_rect)
+        
+        self.tile_detail_close_button = close_button_rect
     
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
@@ -1896,8 +2105,24 @@ class Game:
                 
                 if event.button == 3:
                     if self.game_state == GAME_STATES['PLAYING']:
-                        if self.selected_unit:
-                            self._toggle_unit_detail_panel()
+                        if self.unit_detail_panel_visible:
+                            self.unit_detail_panel_visible = False
+                        elif self.tile_detail_panel_visible:
+                            if hasattr(self, 'tile_detail_close_button') and self.tile_detail_close_button.collidepoint(event.pos):
+                                self.tile_detail_panel_visible = False
+                            else:
+                                q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
+                                tile = self.hex_map.get_tile(q, r) if self.hex_map else None
+                                if tile:
+                                    self.tile_detail_tile = tile
+                                else:
+                                    self.tile_detail_panel_visible = False
+                        else:
+                            q, r = self.get_screen_to_hex(event.pos[0], event.pos[1])
+                            tile = self.hex_map.get_tile(q, r) if self.hex_map else None
+                            if tile:
+                                self.tile_detail_tile = tile
+                                self.tile_detail_panel_visible = True
                 
                 if event.button == 1:
                     self.mouse_pos = event.pos
