@@ -135,7 +135,7 @@ class TerrainGenerator:
                 next_q, next_r = river_tiles[i+1]
                 for d_idx, (dq, dr) in enumerate(HEX_DIRECTIONS):
                     if q + dq == next_q and r + dr == next_r:
-                        river_to_list[i] = d_idx
+                        river_to_list[i] = (-d_idx) % 6
                         break
         
         for i, (q, r) in enumerate(river_tiles):
