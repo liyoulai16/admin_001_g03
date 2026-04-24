@@ -82,6 +82,112 @@ class MenuButton:
             screen.blit(text_surface, text_rect)
 
 
+class DifficultyMenu:
+    def __init__(self, screen: pygame.Surface, localization: Localization, 
+                 animation_manager: AnimationManager = None):
+        self.screen = screen
+        self.loc = localization
+        self.animation_manager = animation_manager
+        
+        if not pygame.font.get_init():
+            pygame.font.init()
+        
+        self.font_manager = FontManager()
+        self._init_fonts()
+        
+        self.buttons: List[MenuButton] = []
+        self._create_buttons()
+        
+        self.mouse_pos = (0, 0)
+        self.mouse_down = False
+        self.last_time = pygame.time.get_ticks() / 1000.0
+        
+        self.selected_difficulty = 'normal'
+    
+    def _init_fonts(self):
+        language = self.loc.get_language()
+        self.font_title = self.font_manager.get_font(48, language)
+        self.font_button = self.font_manager.get_font(28, language)
+        self.font_help = self.font_manager.get_font(20, language)
+    
+    def _create_buttons(self):
+        button_width = 300
+        button_height = 60
+        center_x = SCREEN_WIDTH // 2
+        start_y = SCREEN_HEIGHT // 2 - 80
+        
+        easy_button = MenuButton(
+            pygame.Rect(center_x - button_width // 2, start_y, button_width, button_height),
+            self.loc.t('difficulty_easy'),
+            'select_easy',
+            (80, 150, 100)
+        )
+        self.buttons.append(easy_button)
+        
+        normal_button = MenuButton(
+            pygame.Rect(center_x - button_width // 2, start_y + button_height + 20, button_width, button_height),
+            self.loc.t('difficulty_normal'),
+            'select_normal',
+            (150, 150, 80)
+        )
+        self.buttons.append(normal_button)
+        
+        hard_button = MenuButton(
+            pygame.Rect(center_x - button_width // 2, start_y + (button_height + 20) * 2, button_width, button_height),
+            self.loc.t('difficulty_hard'),
+            'select_hard',
+            (150, 80, 80)
+        )
+        self.buttons.append(hard_button)
+        
+        back_button = MenuButton(
+            pygame.Rect(center_x - button_width // 2, start_y + (button_height + 20) * 3 + 30, button_width, button_height),
+            self.loc.t('back_to_menu'),
+            'back_to_menu',
+            (120, 80, 120)
+        )
+        self.buttons.append(back_button)
+    
+    def set_mouse_state(self, mouse_pos: Tuple[int, int], mouse_down: bool):
+        self.mouse_pos = mouse_pos
+        self.mouse_down = mouse_down
+    
+    def update(self):
+        current_time = pygame.time.get_ticks() / 1000.0
+        dt = current_time - self.last_time
+        self.last_time = current_time
+        
+        for button in self.buttons:
+            button.update(self.mouse_pos, self.mouse_down, dt)
+    
+    def draw(self):
+        self.screen.fill(BACKGROUND_COLOR)
+        
+        title_text = self.loc.t('select_difficulty')
+        try:
+            title_surface = self.font_title.render(title_text, True, UI_COLORS['menu_title'])
+        except Exception:
+            fallback_font = pygame.font.Font(None, 48)
+            title_surface = fallback_font.render(title_text, True, UI_COLORS['menu_title'])
+        
+        title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        self.screen.blit(title_surface, title_rect)
+        
+        for button in self.buttons:
+            button.draw(self.screen, self.font_button)
+    
+    def handle_click(self) -> Optional[str]:
+        for button in self.buttons:
+            if button.enabled and button.rect.collidepoint(self.mouse_pos):
+                if self.animation_manager:
+                    self.animation_manager.particle_system.emit(
+                        button.rect.centerx, button.rect.centery,
+                        UI_COLORS['menu_title'], count=15, spread=80
+                    )
+                return button.action
+        return None
+
+
 class MainMenu:
     def __init__(self, screen: pygame.Surface, localization: Localization, 
                  animation_manager: AnimationManager = None):
