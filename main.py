@@ -237,17 +237,23 @@ class Game:
         current_player = self.get_current_player()
         has_military = tile.unit and tile.unit.owner == current_player
         has_builder = tile.builder_unit and tile.builder_unit.owner == current_player
+        has_settler = tile.settler_unit and tile.settler_unit.owner == current_player
         
-        if has_military and has_builder:
+        unit_count = sum([has_military, has_builder, has_settler])
+        
+        if unit_count > 1:
             self.unit_selection_pending = True
             self.unit_selection_tile = tile
-            self._create_unit_selection_buttons(tile)
+            self._create_unit_selection_buttons(tile, has_military, has_builder, has_settler)
         elif has_military:
             self.selected_unit = tile.unit
             self.show_unit_range(tile.unit)
         elif has_builder:
             self.selected_unit = tile.builder_unit
             self.show_unit_range(tile.builder_unit)
+        elif has_settler:
+            self.selected_unit = tile.settler_unit
+            self.show_unit_range(tile.settler_unit)
     
     def show_unit_range(self, unit: Unit):
         if not unit.moved_this_turn:
@@ -264,7 +270,7 @@ class Game:
                 if target_tile and unit.can_attack(self.hex_map, q, r):
                     target_tile.attackable = True
     
-    def _create_unit_selection_buttons(self, tile: HexTile):
+    def _create_unit_selection_buttons(self, tile: HexTile, has_military: bool, has_builder: bool, has_settler: bool):
         x, y = self.hex_map.hex_to_pixel(tile.q, tile.r)
         screen_x = x + self.map_offset_x
         screen_y = y + self.map_offset_y
@@ -272,26 +278,42 @@ class Game:
         button_width = 70
         button_height = 25
         
-        military_unit_name = self.loc.get_unit_name(tile.unit.unit_type) if tile.unit else "Military"
-        builder_unit_name = self.loc.get_unit_name(tile.builder_unit.unit_type) if tile.builder_unit else "Builder"
+        buttons = []
         
-        military_button = {
-            'rect': pygame.Rect(screen_x - button_width - 5, screen_y - button_height - 30, button_width, button_height),
-            'text': military_unit_name,
-            'action': 'select_military_unit',
-            'color': (100, 120, 180),
-            'unit': tile.unit
-        }
+        if has_military and tile.unit:
+            military_unit_name = self.loc.get_unit_name(tile.unit.unit_type)
+            military_button = {
+                'rect': pygame.Rect(screen_x - button_width - 5, screen_y - button_height - 60, button_width, button_height),
+                'text': military_unit_name,
+                'action': 'select_military_unit',
+                'color': (100, 120, 180),
+                'unit': tile.unit
+            }
+            buttons.append(military_button)
         
-        builder_button = {
-            'rect': pygame.Rect(screen_x + 5, screen_y - button_height - 30, button_width, button_height),
-            'text': builder_unit_name,
-            'action': 'select_builder_unit',
-            'color': (100, 180, 120),
-            'unit': tile.builder_unit
-        }
+        if has_builder and tile.builder_unit:
+            builder_unit_name = self.loc.get_unit_name(tile.builder_unit.unit_type)
+            builder_button = {
+                'rect': pygame.Rect(screen_x - button_width - 5, screen_y - button_height - 30, button_width, button_height),
+                'text': builder_unit_name,
+                'action': 'select_builder_unit',
+                'color': (100, 180, 120),
+                'unit': tile.builder_unit
+            }
+            buttons.append(builder_button)
         
-        self.unit_selection_buttons = [military_button, builder_button]
+        if has_settler and tile.settler_unit:
+            settler_unit_name = self.loc.get_unit_name(tile.settler_unit.unit_type)
+            settler_button = {
+                'rect': pygame.Rect(screen_x + 5, screen_y - button_height - 30, button_width, button_height),
+                'text': settler_unit_name,
+                'action': 'select_settler_unit',
+                'color': (140, 120, 180),
+                'unit': tile.settler_unit
+            }
+            buttons.append(settler_button)
+        
+        self.unit_selection_buttons = buttons
     
     def _draw_unit_selection_buttons(self, screen: pygame.Surface):
         if not self.unit_selection_pending:
@@ -339,6 +361,9 @@ class Game:
         elif action == 'select_builder_unit' and self.unit_selection_tile.builder_unit:
             self.selected_unit = self.unit_selection_tile.builder_unit
             self.show_unit_range(self.unit_selection_tile.builder_unit)
+        elif action == 'select_settler_unit' and self.unit_selection_tile.settler_unit:
+            self.selected_unit = self.unit_selection_tile.settler_unit
+            self.show_unit_range(self.unit_selection_tile.settler_unit)
         
         self.unit_selection_pending = False
         self.unit_selection_buttons = []
@@ -362,6 +387,8 @@ class Game:
         
         if unit.can_build:
             source_tile.builder_unit = None
+        elif unit.can_settle:
+            source_tile.settler_unit = None
         else:
             source_tile.unit = None
         
@@ -370,6 +397,8 @@ class Game:
         
         if unit.can_build:
             target_tile.builder_unit = unit
+        elif unit.can_settle:
+            target_tile.settler_unit = unit
         else:
             target_tile.unit = unit
         
@@ -423,6 +452,59 @@ class Game:
         if tile.builder_unit and tile.builder_unit.owner == tile.owner:
             return False
         return True
+    
+    def _can_destroy_building(self, tile, current_player) -> bool:
+        if not tile:
+            return False
+        if not tile.unit:
+            return False
+        if tile.unit.owner != current_player:
+            return False
+        if tile.unit.attacked_this_turn:
+            return False
+        
+        neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
+        for nq, nr in neighbors:
+            neighbor_tile = self.hex_map.get_tile(nq, nr)
+            if neighbor_tile and neighbor_tile.building:
+                if neighbor_tile.building.owner != current_player:
+                    return True
+        
+        return False
+    
+    def _can_found_town(self, tile, current_player) -> bool:
+        if not tile:
+            return False
+        if not tile.settler_unit:
+            return False
+        if tile.settler_unit.owner != current_player:
+            return False
+        if tile.owner is not None:
+            return False
+        if tile.building:
+            return False
+        
+        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            return False
+        
+        if tile.feature == 'river':
+            return False
+        
+        return True
+    
+    def _get_adjacent_enemy_building(self, tile, current_player):
+        if not tile or not tile.unit:
+            return None
+        
+        neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
+        for nq, nr in neighbors:
+            neighbor_tile = self.hex_map.get_tile(nq, nr)
+            if neighbor_tile and neighbor_tile.building:
+                if neighbor_tile.building.owner != current_player:
+                    return neighbor_tile
+        
+        return None
     
     def expand_territory(self):
         if not self.selected_tile:
@@ -528,6 +610,83 @@ class Game:
                 screen_x, screen_y, (200, 200, 200), count=20, spread=100
             )
     
+    def destroy_building(self):
+        if not self.selected_tile:
+            return
+        
+        if not self.selected_tile.unit:
+            return
+        
+        military_unit = self.selected_tile.unit
+        current_player = self.get_current_player()
+        
+        if military_unit.owner != current_player:
+            return
+        
+        if military_unit.attacked_this_turn:
+            return
+        
+        target_building_tile = self._get_adjacent_enemy_building(self.selected_tile, current_player)
+        if not target_building_tile:
+            self.add_message(self._get_msg('msg_no_building_to_destroy'))
+            return
+        
+        self.attack_with_unit(military_unit, target_building_tile)
+    
+    def found_town(self):
+        if not self.selected_tile:
+            return
+        
+        if not self.selected_tile.settler_unit:
+            return
+        
+        settler = self.selected_tile.settler_unit
+        current_player = self.get_current_player()
+        
+        if settler.owner != current_player:
+            return
+        
+        tile = self.selected_tile
+        
+        if tile.owner is not None:
+            self.add_message(self._get_msg('msg_tile_not_neutral'))
+            return
+        
+        if tile.building:
+            self.add_message(self._get_msg('msg_tile_has_building'))
+            return
+        
+        terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
+        if not terrain_info.get('passable', True):
+            self.add_message(self._get_msg('msg_tile_impassable'))
+            return
+        
+        if tile.feature == 'river':
+            self.add_message(self._get_msg('msg_tile_impassable'))
+            return
+        
+        building = Building('town', tile.q, tile.r, current_player)
+        tile.building = building
+        current_player.add_building(building)
+        
+        tile.owner = current_player
+        current_player.tiles_owned += 1
+        
+        current_player.remove_unit(settler)
+        tile.settler_unit = None
+        
+        self.add_message(self._get_msg('msg_settler_founded_town'))
+        
+        if self.animation_manager:
+            x, y = self.hex_map.hex_to_pixel(tile.q, tile.r)
+            screen_x = x * self.zoom_level + self.map_offset_x
+            screen_y = y * self.zoom_level + self.map_offset_y
+            self.animation_manager.particle_system.emit(
+                screen_x, screen_y, current_player.color, count=30, spread=120
+            )
+        
+        self.select_tile(tile)
+    
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
         unit_name = self.loc.get_unit_name(unit.unit_type)
@@ -629,10 +788,15 @@ class Game:
         
         unit_info = UNIT_INFO.get(unit_type, {})
         is_builder = unit_info.get('can_build', False)
+        is_settler = unit_info.get('can_settle', False)
         
         if is_builder:
             if self.selected_tile.builder_unit:
                 self.add_message(self._get_msg('msg_tile_has_builder'))
+                return
+        elif is_settler:
+            if self.selected_tile.settler_unit:
+                self.add_message(self._get_msg('msg_tile_has_unit'))
                 return
         else:
             if self.selected_tile.unit:
@@ -652,6 +816,8 @@ class Game:
             
             if unit.can_build:
                 self.selected_tile.builder_unit = unit
+            elif unit.can_settle:
+                self.selected_tile.settler_unit = unit
             else:
                 self.selected_tile.unit = unit
             
@@ -770,8 +936,13 @@ class Game:
     
     def check_game_end(self):
         for player in self.players:
-            if player.tiles_owned <= 0 and len(player.units) <= 0:
+            has_territory = player.tiles_owned > 0
+            has_units = len(player.units) > 0
+            has_buildings = len(player.buildings) > 0
+            
+            if not has_territory and not has_units and not has_buildings:
                 winner = [p for p in self.players if p != player][0]
+                self.add_message(self._get_msg('msg_victory_all_enemies_defeated'))
                 self.add_message(f"{self._get_msg('msg_game_over')} {winner.name} {self._get_msg('msg_wins')}")
                 self.running = False
                 return
@@ -859,6 +1030,14 @@ class Game:
                         self.draw_unit_icon(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
                     else:
                         self.draw_unit_icon(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
+                
+                if tile.settler_unit:
+                    unit_id = id(tile.settler_unit)
+                    if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
+                        anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
+                        self.draw_unit_icon(anim_pos[0] + 6 * self.zoom_level, anim_pos[1] - 10 * self.zoom_level, tile.settler_unit)
+                    else:
+                        self.draw_unit_icon(screen_x + 6 * self.zoom_level, screen_y - 10 * self.zoom_level, tile.settler_unit)
         
         if self.animation_manager:
             self.animation_manager.particle_system.draw(self.screen)
@@ -868,10 +1047,15 @@ class Game:
         current_player = self.get_current_player()
         can_expand = self._can_expand_now(self.selected_tile, current_player)
         can_clear = self._can_clear_enemy_tile(self.selected_tile, current_player)
+        can_destroy_building = self._can_destroy_building(self.selected_tile, current_player)
+        can_found_town = self._can_found_town(self.selected_tile, current_player)
         
         self.ui.draw_resource_panel(self.screen, current_player, self.turn)
         self.ui.draw_tile_info(self.screen, self.selected_tile)
-        buttons = self.ui.draw_action_buttons(self.screen, self.selected_tile, current_player, can_expand, can_clear)
+        buttons = self.ui.draw_action_buttons(
+            self.screen, self.selected_tile, current_player, 
+            can_expand, can_clear, can_destroy_building, can_found_town
+        )
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
         turn_indicator = self.ui.font_large.render(
@@ -1934,6 +2118,8 @@ class Game:
             self._draw_builder_icon(x, y, color, unit)
         elif unit_type == 'cavalry':
             self._draw_cavalry_icon(x, y, color, unit)
+        elif unit_type == 'settler':
+            self._draw_settler_icon(x, y, color, unit)
         else:
             self._draw_default_unit_icon(x, y, color, unit)
     
@@ -2069,6 +2255,54 @@ class Game:
         
         sword_x = x + 5 * scale
         pygame.draw.line(self.screen, sword_color, (sword_x, base_y - 8 * scale), (sword_x, base_y), int(1 * scale))
+        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_settler_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        scale = self.zoom_level
+        detail_colors = UNIT_DETAIL_COLORS.get('settler', {})
+        
+        body_color = detail_colors.get('body', (140, 110, 90))
+        hat_color = detail_colors.get('hat', (200, 180, 140))
+        flag_color = detail_colors.get('flag', (80, 120, 200))
+        pack_color = detail_colors.get('pack', (160, 140, 120))
+        
+        base_y = y + 12 * scale
+        
+        pygame.draw.circle(self.screen, hat_color, (int(x), int(base_y - 4 * scale)), int(5 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4 * scale)), int(5 * scale), 1)
+        
+        pygame.draw.polygon(self.screen, hat_color, [
+            (x, base_y - 10 * scale),
+            (x - 6 * scale, base_y - 2 * scale),
+            (x + 6 * scale, base_y - 2 * scale)
+        ])
+        
+        body_rect = pygame.Rect(x - 4 * scale, base_y, 8 * scale, 8 * scale)
+        pygame.draw.rect(self.screen, body_color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        pack_rect = pygame.Rect(x - 5 * scale, base_y + 2 * scale, 3 * scale, 5 * scale)
+        pygame.draw.rect(self.screen, pack_color, pack_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), pack_rect, 1)
+        
+        flag_pole_x = x + 5 * scale
+        pygame.draw.line(self.screen, (101, 67, 33), (flag_pole_x, base_y - 8 * scale), (flag_pole_x, base_y + 2 * scale), int(2 * scale))
+        
+        pygame.draw.polygon(self.screen, unit.owner.color if unit.owner else flag_color, [
+            (flag_pole_x, base_y - 8 * scale),
+            (flag_pole_x + 5 * scale, base_y - 6 * scale),
+            (flag_pole_x, base_y - 4 * scale)
+        ])
+        pygame.draw.polygon(self.screen, (255, 255, 255), [
+            (flag_pole_x, base_y - 8 * scale),
+            (flag_pole_x + 5 * scale, base_y - 6 * scale),
+            (flag_pole_x, base_y - 4 * scale)
+        ], 1)
+        
+        if unit.can_settle:
+            pygame.draw.circle(self.screen, (200, 150, 100), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale))
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale), 1)
         
         self._draw_health_bar(x, y, unit)
     
@@ -2264,6 +2498,10 @@ class Game:
                                     self.expand_territory()
                                 elif action == 'clear_enemy_tile':
                                     self.clear_enemy_tile()
+                                elif action == 'destroy_building':
+                                    self.destroy_building()
+                                elif action == 'found_town':
+                                    self.found_town()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:
                                         self.settings_popup.hide()
