@@ -112,6 +112,7 @@ class Unit:
             self.max_health = info['health']
             self.movement = info['movement']
             self.can_build = info.get('can_build', False)
+            self.can_expand_territory = info.get('can_expand_territory', False)
         else:
             self.name = unit_type
             self.attack = 10
@@ -120,6 +121,7 @@ class Unit:
             self.max_health = 100
             self.movement = 2
             self.can_build = False
+            self.can_expand_territory = False
     
     def reset_for_new_turn(self):
         self.moved_this_turn = False

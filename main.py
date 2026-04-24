@@ -94,7 +94,7 @@ class Game:
         
         if self.players:
             self.build_popup = BuildPopup(
-                300, 350, self.loc, self.ui.get_font_manager(),
+                300, 450, self.loc, self.ui.get_font_manager(),
                 self.get_current_player()
             )
             self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -116,7 +116,7 @@ class Game:
                 self.settings_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
                 
                 self.build_popup = BuildPopup(
-                    300, 350, self.loc, self.ui.get_font_manager(),
+                    300, 450, self.loc, self.ui.get_font_manager(),
                     self.get_current_player()
                 )
                 self.build_popup.update_position(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -368,30 +368,55 @@ class Game:
         
         unit.moved_this_turn = True
         
-        old_owner = target_tile.owner
-        if target_tile.owner != unit.owner:
-            if target_tile.owner:
-                target_tile.owner.tiles_owned -= 1
-            
-            target_tile.owner = unit.owner
-            unit.owner.tiles_owned += 1
-            
-            unit_name = self.loc.get_unit_name(unit.unit_type)
-            if old_owner:
-                msg = f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}"
-            else:
-                msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
-            self.add_message(msg)
-            
-            if self.animation_manager:
-                x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
-                screen_x = x + self.map_offset_x
-                screen_y = y + self.map_offset_y
-                self.animation_manager.particle_system.emit(
-                    screen_x, screen_y, unit.owner.color, count=20, spread=100
-                )
-        
         self.select_tile(target_tile)
+    
+    def expand_territory(self):
+        if not self.selected_tile:
+            return
+        
+        if not self.selected_tile.builder_unit:
+            return
+        
+        builder = self.selected_tile.builder_unit
+        if not builder.can_expand_territory:
+            return
+        
+        current_player = self.get_current_player()
+        neighbors = self.hex_map.get_neighbors(self.selected_tile.q, self.selected_tile.r)
+        
+        expanded = False
+        for nq, nr in neighbors:
+            neighbor_tile = self.hex_map.get_tile(nq, nr)
+            if neighbor_tile and neighbor_tile.owner != current_player:
+                if neighbor_tile.terrain not in ['mountain', 'water']:
+                    old_owner = neighbor_tile.owner
+                    
+                    if neighbor_tile.owner:
+                        neighbor_tile.owner.tiles_owned -= 1
+                    
+                    neighbor_tile.owner = current_player
+                    current_player.tiles_owned += 1
+                    
+                    unit_name = self.loc.get_unit_name(builder.unit_type)
+                    if old_owner:
+                        msg = f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}"
+                    else:
+                        msg = f"{unit_name} {self._get_msg('msg_captured_neutral_tile')}"
+                    self.add_message(msg)
+                    
+                    if self.animation_manager:
+                        x, y = self.hex_map.hex_to_pixel(neighbor_tile.q, neighbor_tile.r)
+                        screen_x = x + self.map_offset_x
+                        screen_y = y + self.map_offset_y
+                        self.animation_manager.particle_system.emit(
+                            screen_x, screen_y, current_player.color, count=20, spread=100
+                        )
+                    
+                    expanded = True
+                    break
+        
+        if not expanded:
+            self.add_message(self._get_msg('msg_no_territory_to_expand'))
     
     def attack_with_unit(self, unit: Unit, target_tile: HexTile):
         unit.attacked_this_turn = True
@@ -553,6 +578,15 @@ class Game:
         if self.selected_tile.building:
             self.add_message(self._get_msg('msg_tile_has_building'))
             return
+        
+        building_info = BUILDING_INFO.get(building_type, {})
+        required_terrain = building_info.get('required_terrain', [])
+        
+        if required_terrain:
+            if self.selected_tile.terrain not in required_terrain:
+                terrain_names = ", ".join([self.loc.get_terrain_name(t) for t in required_terrain])
+                self.add_message(f"{self.loc.get_building_name(building_type)} can only be built on {terrain_names}!")
+                return
         
         if building_type not in BUILDING_INFO:
             return
@@ -1121,6 +1155,8 @@ class Game:
             self._draw_archer_icon(x, y, color, unit)
         elif unit_type == 'builder':
             self._draw_builder_icon(x, y, color, unit)
+        elif unit_type == 'cavalry':
+            self._draw_cavalry_icon(x, y, color, unit)
         else:
             self._draw_default_unit_icon(x, y, color, unit)
     
@@ -1225,6 +1261,37 @@ class Game:
         if unit.can_build:
             pygame.draw.circle(self.screen, (100, 255, 100), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale))
             pygame.draw.circle(self.screen, (255, 255, 255), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale), 1)
+        
+        self._draw_health_bar(x, y, unit)
+    
+    def _draw_cavalry_icon(self, x: float, y: float, color: tuple, unit: Unit):
+        scale = self.zoom_level
+        detail_colors = UNIT_DETAIL_COLORS.get('cavalry', {})
+        
+        body_color = detail_colors.get('body', (120, 80, 150))
+        helmet_color = detail_colors.get('helmet', (100, 80, 120))
+        horse_color = detail_colors.get('horse', (139, 90, 43))
+        sword_color = detail_colors.get('sword', (200, 200, 200))
+        saddle_color = detail_colors.get('saddle', (80, 60, 40))
+        
+        base_y = y + 12 * scale
+        
+        pygame.draw.ellipse(self.screen, horse_color, (x - 8 * scale, base_y - 2 * scale, 16 * scale, 8 * scale))
+        pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8 * scale, base_y - 2 * scale, 16 * scale, 8 * scale), 1)
+        
+        pygame.draw.circle(self.screen, horse_color, (int(x - 6 * scale), int(base_y - 6 * scale)), int(4 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x - 6 * scale), int(base_y - 6 * scale)), int(4 * scale), 1)
+        
+        pygame.draw.rect(self.screen, saddle_color, (x - 3 * scale, base_y - 3 * scale, 6 * scale, 3 * scale))
+        
+        pygame.draw.rect(self.screen, body_color, (x - 2 * scale, base_y - 10 * scale, 4 * scale, 7 * scale))
+        pygame.draw.rect(self.screen, (255, 255, 255), (x - 2 * scale, base_y - 10 * scale, 4 * scale, 7 * scale), 1)
+        
+        pygame.draw.circle(self.screen, helmet_color, (int(x), int(base_y - 13 * scale)), int(3 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 13 * scale)), int(3 * scale), 1)
+        
+        sword_x = x + 5 * scale
+        pygame.draw.line(self.screen, sword_color, (sword_x, base_y - 8 * scale), (sword_x, base_y), int(1 * scale))
         
         self._draw_health_bar(x, y, unit)
     
@@ -1350,6 +1417,8 @@ class Game:
                                     if self.build_popup:
                                         if self.players:
                                             self.build_popup.update_player(self.get_current_player())
+                                        if self.selected_tile:
+                                            self.build_popup.set_selected_tile(self.selected_tile)
                                         self.build_popup.show()
                                 elif action == 'open_train_popup':
                                     if self.train_popup:
@@ -1358,6 +1427,8 @@ class Game:
                                         if self.selected_tile:
                                             self.train_popup.set_selected_tile(self.selected_tile)
                                         self.train_popup.show()
+                                elif action == 'expand_territory':
+                                    self.expand_territory()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:
                                         self.settings_popup.hide()
