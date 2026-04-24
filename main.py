@@ -351,10 +351,10 @@ class Game:
         if self.animation_manager:
             start_x, start_y = self.hex_map.hex_to_pixel(unit.tile_q, unit.tile_r)
             end_x, end_y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
-            start_screen_x = start_x + self.map_offset_x
-            start_screen_y = start_y + self.map_offset_y
-            end_screen_x = end_x + self.map_offset_x
-            end_screen_y = end_y + self.map_offset_y
+            start_screen_x = start_x * self.zoom_level + self.map_offset_x
+            start_screen_y = start_y * self.zoom_level + self.map_offset_y
+            end_screen_x = end_x * self.zoom_level + self.map_offset_x
+            end_screen_y = end_y * self.zoom_level + self.map_offset_y
             
             unit_id = id(unit)
             self.animation_manager.add_unit_move(unit_id, (start_screen_x, start_screen_y), 
@@ -395,6 +395,8 @@ class Game:
         if tile.builder_unit.expanded_territory_this_turn:
             return False
         if tile.owner == current_player:
+            return False
+        if tile.owner is not None:
             return False
         terrain_info = TERRAIN_TYPES.get(tile.terrain, {})
         if not terrain_info.get('passable', True):
@@ -458,8 +460,8 @@ class Game:
             
             if self.animation_manager:
                 x, y = self.hex_map.hex_to_pixel(builder_tile.q, builder_tile.r)
-                screen_x = x + self.map_offset_x
-                screen_y = y + self.map_offset_y
+                screen_x = x * self.zoom_level + self.map_offset_x
+                screen_y = y * self.zoom_level + self.map_offset_y
                 self.animation_manager.particle_system.emit(
                     screen_x, screen_y, current_player.color, count=20, spread=100
                 )
@@ -471,10 +473,10 @@ class Game:
         if self.animation_manager:
             start_x, start_y = self.hex_map.hex_to_pixel(unit.tile_q, unit.tile_r)
             target_x, target_y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
-            start_screen_x = start_x + self.map_offset_x
-            start_screen_y = start_y + self.map_offset_y
-            target_screen_x = target_x + self.map_offset_x
-            target_screen_y = target_y + self.map_offset_y
+            start_screen_x = start_x * self.zoom_level + self.map_offset_x
+            start_screen_y = start_y * self.zoom_level + self.map_offset_y
+            target_screen_x = target_x * self.zoom_level + self.map_offset_x
+            target_screen_y = target_y * self.zoom_level + self.map_offset_y
             
             unit_id = id(unit)
             self.animation_manager.add_unit_attack(unit_id, (start_screen_x, start_screen_y),
@@ -508,8 +510,8 @@ class Game:
                 
                 if self.animation_manager:
                     x, y = self.hex_map.hex_to_pixel(target_tile.q, target_tile.r)
-                    screen_x = x + self.map_offset_x
-                    screen_y = y + self.map_offset_y
+                    screen_x = x * self.zoom_level + self.map_offset_x
+                    screen_y = y * self.zoom_level + self.map_offset_y
                     self.animation_manager.particle_system.emit(
                         screen_x, screen_y, (255, 100, 100), count=30, spread=120
                     )
@@ -536,9 +538,8 @@ class Game:
                 if target_tile.owner:
                     target_tile.owner.tiles_owned -= 1
                 
-                target_tile.owner = unit.owner
-                unit.owner.tiles_owned += 1
-                self.add_message(f"{unit_name} {self._get_msg('msg_captured_enemy_tile')}")
+                target_tile.owner = None
+                self.add_message(f"{unit_name} {self._get_msg('msg_cleared_enemy_tile')}")
         
         self.select_tile(target_tile)
     
@@ -602,8 +603,8 @@ class Game:
             
             if self.animation_manager:
                 x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
-                screen_x = x + self.map_offset_x
-                screen_y = y + self.map_offset_y
+                screen_x = x * self.zoom_level + self.map_offset_x
+                screen_y = y * self.zoom_level + self.map_offset_y
                 self.animation_manager.particle_system.emit(
                     screen_x, screen_y, player.color, count=20, spread=80
                 )
@@ -654,8 +655,8 @@ class Game:
             
             if self.animation_manager:
                 x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
-                screen_x = x + self.map_offset_x
-                screen_y = y + self.map_offset_y
+                screen_x = x * self.zoom_level + self.map_offset_x
+                screen_y = y * self.zoom_level + self.map_offset_y
                 self.animation_manager.particle_system.emit(
                     screen_x, screen_y, player.color, count=25, spread=100
                 )
@@ -2137,6 +2138,11 @@ class Game:
                         settings_visible = self.settings_popup and self.settings_popup.visible
                         build_visible = self.build_popup and self.build_popup.visible
                         train_visible = self.train_popup and self.train_popup.visible
+                        
+                        if self.tile_detail_panel_visible:
+                            if hasattr(self, 'tile_detail_close_button') and self.tile_detail_close_button.collidepoint(event.pos):
+                                self.tile_detail_panel_visible = False
+                                continue
                         
                         if self.unit_detail_panel_visible:
                             if hasattr(self, 'unit_detail_close_button') and self.unit_detail_close_button.collidepoint(event.pos):

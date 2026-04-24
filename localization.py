@@ -76,6 +76,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'msg_game_start': 'Game started! You are Player 1 (Blue)',
         'msg_captured_enemy_tile': 'captured enemy tile!',
+        'msg_cleared_enemy_tile': 'cleared enemy tile, it is now neutral',
         'msg_captured_neutral_tile': 'captured neutral tile',
         'msg_attacked': 'attacked',
         'msg_damage': 'damage',
@@ -265,6 +266,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         
         'msg_game_start': '游戏开始！你是玩家1 (蓝色)',
         'msg_captured_enemy_tile': '占领了敌方地块！',
+        'msg_cleared_enemy_tile': '清扫了敌方地块，现在变为中立地块',
         'msg_captured_neutral_tile': '占领了中立地块',
         'msg_attacked': '攻击',
         'msg_damage': '点伤害',

@@ -64,7 +64,6 @@ class Player:
     
     def add_building(self, building):
         self.buildings.append(building)
-        self.tiles_owned += 1
     
     def add_unit(self, unit):
         self.units.append(unit)
@@ -76,7 +75,6 @@ class Player:
     def remove_building(self, building):
         if building in self.buildings:
             self.buildings.remove(building)
-            self.tiles_owned -= 1
 
 
 class Building:

@@ -125,10 +125,27 @@ class SimpleAI:
                 target_tile.unit = unit
                 unit.moved_this_turn = True
                 
-                if target_tile.owner != self.player:
-                    target_tile.owner = self.player
-                    self.player.tiles_owned += 1
-                    actions.append(f"占领了地块({best[0]}, {best[1]})")
+                if target_tile.owner is not None and target_tile.owner != self.player:
+                    if not unit.can_build:
+                        target_tile.owner.tiles_owned -= 1
+                        target_tile.owner = None
+                        actions.append(f"清扫了敌方地块({best[0]}, {best[1]})，变为中立")
+                    else:
+                        actions.append(f"移动了单位到({best[0]}, {best[1]})")
+                elif target_tile.owner is None and unit.can_build:
+                    has_adjacent_ally = False
+                    neighbors = hex_map.get_neighbors(target_tile.q, target_tile.r)
+                    for nq, nr in neighbors:
+                        neighbor_tile = hex_map.get_tile(nq, nr)
+                        if neighbor_tile and neighbor_tile.owner == self.player:
+                            has_adjacent_ally = True
+                            break
+                    if has_adjacent_ally:
+                        target_tile.owner = self.player
+                        self.player.tiles_owned += 1
+                        actions.append(f"扩充了领地到地块({best[0]}, {best[1]})")
+                    else:
+                        actions.append(f"移动了单位到({best[0]}, {best[1]})")
                 else:
                     actions.append(f"移动了单位到({best[0]}, {best[1]})")
         
