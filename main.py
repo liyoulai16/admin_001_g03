@@ -723,7 +723,12 @@ class Game:
         self._handle_edge_scroll()
         
         if self.hex_map:
-            for (q, r), tile in self.hex_map.tiles.items():
+            sorted_tiles = sorted(
+                self.hex_map.tiles.items(),
+                key=lambda item: self._get_tile_depth(item[1].q, item[1].r)
+            )
+            
+            for (q, r), tile in sorted_tiles:
                 x, y = self.hex_map.hex_to_pixel(q, r)
                 screen_x = x * self.zoom_level + self.map_offset_x
                 screen_y = y * self.zoom_level + self.map_offset_y
@@ -733,7 +738,7 @@ class Game:
                 if screen_y < -HEX_SIZE * self.zoom_level * 2 or screen_y > SCREEN_HEIGHT + HEX_SIZE * self.zoom_level * 2:
                     continue
                 
-                corners = self._get_scaled_hex_corners(screen_x, screen_y)
+                corners = self._get_25d_hex_corners(screen_x, screen_y)
                 
                 tile_scale = 1.0
                 if self.animation_manager and (q, r) in self.animation_manager.tile_animations:
@@ -741,38 +746,39 @@ class Game:
                 
                 if tile_scale != 1.0:
                     scaled_corners = []
+                    center_x = sum(c[0] for c in corners) / 6
+                    center_y = sum(c[1] for c in corners) / 6
                     for cx, cy in corners:
-                        dx = cx - screen_x
-                        dy = cy - screen_y
+                        dx = cx - center_x
+                        dy = cy - center_y
                         scaled_corners.append((
-                            screen_x + dx * tile_scale,
-                            screen_y + dy * tile_scale
+                            center_x + dx * tile_scale,
+                            center_y + dy * tile_scale
                         ))
                     corners = scaled_corners
                 
-                pygame.draw.polygon(self.screen, tile.get_color(), corners)
-                pygame.draw.polygon(self.screen, tile.get_border_color(), corners, 2)
+                self._draw_25d_tile_with_shadow(screen_x, screen_y, corners, tile)
                 
                 self._draw_terrain_decoration(screen_x, screen_y, tile)
                 
                 if tile.building:
-                    self.draw_building_icon(screen_x, screen_y, tile.building)
+                    self._draw_25d_building(screen_x, screen_y, tile.building)
                 
                 if tile.unit:
                     unit_id = id(tile.unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self.draw_unit_icon(anim_pos[0], anim_pos[1] + 5 * self.zoom_level, tile.unit)
+                        self._draw_25d_unit(anim_pos[0], anim_pos[1] + 5 * self.zoom_level, tile.unit)
                     else:
-                        self.draw_unit_icon(screen_x, screen_y + 5 * self.zoom_level, tile.unit)
+                        self._draw_25d_unit(screen_x, screen_y + 5 * self.zoom_level, tile.unit)
                 
                 if tile.builder_unit:
                     unit_id = id(tile.builder_unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self.draw_unit_icon(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
+                        self._draw_25d_unit(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
                     else:
-                        self.draw_unit_icon(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
+                        self._draw_25d_unit(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
         
         if self.animation_manager:
             self.animation_manager.particle_system.draw(self.screen)
@@ -806,6 +812,434 @@ class Game:
             y = center_y + scaled_hex_size * math.sin(angle)
             corners.append((x, y))
         return corners
+    
+    def _get_tile_depth(self, q: int, r: int) -> float:
+        return r + q * 0.5
+    
+    def _get_25d_hex_corners(self, center_x: float, center_y: float) -> List[Tuple[float, float]]:
+        corners = []
+        scaled_hex_size = HEX_SIZE * self.zoom_level
+        elevation_offset = 2 * self.zoom_level
+        
+        for i in range(6):
+            angle = math.pi / 3 * i
+            x = center_x + scaled_hex_size * math.cos(angle)
+            y = center_y + scaled_hex_size * math.sin(angle) - elevation_offset
+            corners.append((x, y))
+        return corners
+    
+    def _draw_25d_tile_with_shadow(self, screen_x: float, screen_y: float, corners: List[Tuple[float, float]], tile: HexTile):
+        scale = self.zoom_level
+        
+        shadow_offset_x = 3 * scale
+        shadow_offset_y = 5 * scale
+        shadow_corners = []
+        for cx, cy in corners:
+            shadow_corners.append((cx + shadow_offset_x, cy + shadow_offset_y))
+        
+        shadow_color = (10, 20, 30, 100)
+        shadow_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.polygon(shadow_surface, shadow_color, shadow_corners)
+        self.screen.blit(shadow_surface, (0, 0))
+        
+        base_color = tile.get_color()
+        
+        highlight_color = (
+            min(255, base_color[0] + 30),
+            min(255, base_color[1] + 30),
+            min(255, base_color[2] + 30)
+        )
+        
+        shadow_color_3d = (
+            max(0, base_color[0] - 40),
+            max(0, base_color[1] - 40),
+            max(0, base_color[2] - 40)
+        )
+        
+        pygame.draw.polygon(self.screen, base_color, corners)
+        
+        top_corners = []
+        elevation_height = 3 * scale
+        for cx, cy in corners:
+            top_corners.append((cx, cy - elevation_height))
+        
+        pygame.draw.polygon(self.screen, highlight_color, top_corners)
+        
+        for i in range(6):
+            side_corners = [
+                corners[i],
+                corners[(i + 1) % 6],
+                top_corners[(i + 1) % 6],
+                top_corners[i]
+            ]
+            
+            if i in [0, 1, 2]:
+                side_color = highlight_color
+            else:
+                side_color = shadow_color_3d
+            
+            pygame.draw.polygon(self.screen, side_color, side_corners)
+        
+        pygame.draw.polygon(self.screen, tile.get_border_color(), top_corners, 1)
+    
+    def _draw_25d_building(self, x: float, y: float, building):
+        scale = self.zoom_level
+        color = building.owner.color
+        building_type = building.building_type
+        
+        elevation_offset = 3 * scale
+        
+        if building_type == 'town':
+            self._draw_25d_town(x, y - elevation_offset, color, scale)
+        elif building_type == 'barracks':
+            self._draw_25d_barracks(x, y - elevation_offset, color, scale)
+        elif building_type == 'farm':
+            self._draw_25d_farm(x, y - elevation_offset, color, scale)
+        elif building_type == 'tower':
+            self._draw_25d_tower(x, y - elevation_offset, color, scale)
+        elif building_type == 'lumbermill':
+            self._draw_25d_lumbermill(x, y - elevation_offset, color, scale)
+        else:
+            self._draw_25d_default_building(x, y - elevation_offset, color, scale)
+    
+    def _draw_25d_unit(self, x: float, y: float, unit):
+        scale = self.zoom_level
+        elevation_offset = 5 * scale
+        base_y = y - elevation_offset
+        
+        unit_type = unit.unit_type
+        unit_colors = UNIT_DETAIL_COLORS.get(unit_type, {})
+        
+        shadow_offset_x = 2 * scale
+        shadow_offset_y = 3 * scale
+        shadow_color = (10, 20, 30, 80)
+        shadow_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.circle(shadow_surface, shadow_color, 
+                          (int(x + shadow_offset_x), int(y + shadow_offset_y)), 
+                          int(6 * scale))
+        self.screen.blit(shadow_surface, (0, 0))
+        
+        if unit_type == 'warrior':
+            self._draw_25d_warrior(x, base_y, unit_colors, scale)
+        elif unit_type == 'archer':
+            self._draw_25d_archer(x, base_y, unit_colors, scale)
+        elif unit_type == 'builder':
+            self._draw_25d_builder(x, base_y, unit_colors, scale)
+        elif unit_type == 'cavalry':
+            self._draw_25d_cavalry(x, base_y, unit_colors, scale)
+        else:
+            self._draw_25d_default_unit(x, base_y, unit_colors, scale)
+    
+    def _draw_25d_town(self, x: float, y: float, owner_color: tuple, scale: float):
+        detail_colors = BUILDING_DETAIL_COLORS.get('town', {})
+        roof_color = detail_colors.get('roof', (200, 100, 80))
+        wall_color = detail_colors.get('wall', (180, 160, 140))
+        door_color = detail_colors.get('door', (100, 60, 40))
+        window_color = detail_colors.get('window', (255, 255, 200))
+        
+        base_width = 18 * scale
+        base_height = 10 * scale
+        wall_height = 12 * scale
+        
+        base_shadow = (
+            (x - base_width/2, y),
+            (x + base_width/2, y),
+            (x + base_width/2 + 2 * scale, y + 2 * scale),
+            (x - base_width/2 + 2 * scale, y + 2 * scale)
+        )
+        pygame.draw.polygon(self.screen, (80, 70, 60), base_shadow)
+        
+        front_wall = (
+            (x - base_width/2, y),
+            (x + base_width/2, y),
+            (x + base_width/2, y - wall_height),
+            (x - base_width/2, y - wall_height)
+        )
+        pygame.draw.polygon(self.screen, wall_color, front_wall)
+        pygame.draw.polygon(self.screen, (255, 255, 255), front_wall, 1)
+        
+        side_wall = (
+            (x + base_width/2, y),
+            (x + base_width/2 + 2 * scale, y + 2 * scale),
+            (x + base_width/2 + 2 * scale, y - wall_height + 2 * scale),
+            (x + base_width/2, y - wall_height)
+        )
+        pygame.draw.polygon(self.screen, (max(0, wall_color[0] - 30), max(0, wall_color[1] - 30), max(0, wall_color[2] - 30)), side_wall)
+        
+        roof_points = [
+            (x, y - wall_height - 8 * scale),
+            (x - base_width/2 - 3 * scale, y - wall_height),
+            (x + base_width/2 + 3 * scale, y - wall_height)
+        ]
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+        
+        door_rect = pygame.Rect(x - 3 * scale, y - 7 * scale, 6 * scale, 7 * scale)
+        pygame.draw.rect(self.screen, door_color, door_rect)
+        
+        window_rect = pygame.Rect(x - 6 * scale, y - wall_height + 3 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
+        window_rect2 = pygame.Rect(x + 2 * scale, y - wall_height + 3 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect2)
+    
+    def _draw_25d_barracks(self, x: float, y: float, owner_color: tuple, scale: float):
+        detail_colors = BUILDING_DETAIL_COLORS.get('barracks', {})
+        wall_color = detail_colors.get('wall', (120, 100, 80))
+        roof_color = detail_colors.get('roof', (180, 120, 60))
+        flag_color = detail_colors.get('flag', (200, 50, 50))
+        pole_color = detail_colors.get('pole', (80, 60, 40))
+        window_color = detail_colors.get('window', (255, 255, 200))
+        
+        base_width = 16 * scale
+        wall_height = 14 * scale
+        
+        front_wall = (
+            (x - base_width/2, y),
+            (x + base_width/2, y),
+            (x + base_width/2, y - wall_height),
+            (x - base_width/2, y - wall_height)
+        )
+        pygame.draw.polygon(self.screen, wall_color, front_wall)
+        pygame.draw.polygon(self.screen, (255, 255, 255), front_wall, 1)
+        
+        flag_x = x
+        flag_top_y = y - wall_height - 6 * scale
+        pygame.draw.line(self.screen, pole_color, (flag_x, y - wall_height), (flag_x, flag_top_y), int(2 * scale))
+        
+        flag_points = [
+            (flag_x, flag_top_y),
+            (flag_x + 8 * scale, flag_top_y + 4 * scale),
+            (flag_x, flag_top_y + 8 * scale)
+        ]
+        pygame.draw.polygon(self.screen, flag_color, flag_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
+        
+        window_rect = pygame.Rect(x - 5 * scale, y - 5 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
+        window_rect2 = pygame.Rect(x + 1 * scale, y - 5 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect2)
+    
+    def _draw_25d_farm(self, x: float, y: float, owner_color: tuple, scale: float):
+        detail_colors = BUILDING_DETAIL_COLORS.get('farm', {})
+        field_dark = detail_colors.get('field_dark', (60, 120, 40))
+        field_light = detail_colors.get('field_light', (100, 160, 80))
+        crop_color = detail_colors.get('crop', (255, 220, 50))
+        barn_color = detail_colors.get('barn', (180, 140, 100))
+        
+        field_width = 16 * scale
+        field_height = 8 * scale
+        
+        field_rect = pygame.Rect(x - field_width/2, y - field_height, field_width, field_height)
+        pygame.draw.rect(self.screen, field_dark, field_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), field_rect, 1)
+        
+        for i in range(3):
+            plant_x = x - 5 * scale + i * 5 * scale
+            plant_y = y - field_height - 2 * scale
+            pygame.draw.line(self.screen, field_light, (plant_x, plant_y + 2 * scale), (plant_x, plant_y - 3 * scale), int(1 * scale))
+            pygame.draw.circle(self.screen, crop_color, (int(plant_x), int(plant_y - 4 * scale)), int(2 * scale))
+        
+        pygame.draw.rect(self.screen, barn_color, (x - 3 * scale, y - field_height - 8 * scale, 6 * scale, 6 * scale))
+        pygame.draw.rect(self.screen, (255, 255, 255), (x - 3 * scale, y - field_height - 8 * scale, 6 * scale, 6 * scale), 1)
+    
+    def _draw_25d_tower(self, x: float, y: float, owner_color: tuple, scale: float):
+        detail_colors = BUILDING_DETAIL_COLORS.get('tower', {})
+        stone_dark = detail_colors.get('stone_dark', (100, 100, 100))
+        stone_light = detail_colors.get('stone_light', (140, 140, 140))
+        crenellation_color = detail_colors.get('crenellation', (80, 120, 200))
+        window_color = detail_colors.get('window', (80, 80, 150))
+        
+        base_width = 10 * scale
+        tower_height = 16 * scale
+        
+        tower_rect = pygame.Rect(x - base_width/2, y - tower_height, base_width, tower_height)
+        pygame.draw.rect(self.screen, stone_dark, tower_rect)
+        pygame.draw.rect(self.screen, stone_light, tower_rect, 1)
+        
+        top_width = 14 * scale
+        top_height = 4 * scale
+        top_rect = pygame.Rect(x - top_width/2, y - tower_height - top_height, top_width, top_height)
+        pygame.draw.rect(self.screen, crenellation_color, top_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), top_rect, 1)
+        
+        for i in range(3):
+            notch_x = x - top_width/2 + i * 6 * scale
+            notch_rect = pygame.Rect(notch_x, y - tower_height - top_height - 3 * scale, 3 * scale, 3 * scale)
+            pygame.draw.rect(self.screen, crenellation_color, notch_rect)
+        
+        window_rect = pygame.Rect(x - 2 * scale, y - 8 * scale, 4 * scale, 6 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
+    
+    def _draw_25d_lumbermill(self, x: float, y: float, owner_color: tuple, scale: float):
+        detail_colors = BUILDING_DETAIL_COLORS.get('lumbermill', {})
+        wood_dark = detail_colors.get('wood_dark', (101, 67, 33))
+        wood_light = detail_colors.get('wood_light', (139, 90, 43))
+        roof_color = detail_colors.get('roof', (80, 50, 30))
+        log_color = detail_colors.get('log', (101, 67, 33))
+        
+        base_width = 14 * scale
+        wall_height = 10 * scale
+        
+        front_wall = (
+            (x - base_width/2, y),
+            (x + base_width/2, y),
+            (x + base_width/2, y - wall_height),
+            (x - base_width/2, y - wall_height)
+        )
+        pygame.draw.polygon(self.screen, wood_light, front_wall)
+        pygame.draw.polygon(self.screen, (255, 255, 255), front_wall, 1)
+        
+        roof_points = [
+            (x, y - wall_height - 6 * scale),
+            (x - base_width/2 - 2 * scale, y - wall_height),
+            (x + base_width/2 + 2 * scale, y - wall_height)
+        ]
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+        
+        log_rect = pygame.Rect(x + 4 * scale, y - 6 * scale, 8 * scale, 3 * scale)
+        pygame.draw.rect(self.screen, log_color, log_rect)
+    
+    def _draw_25d_default_building(self, x: float, y: float, owner_color: tuple, scale: float):
+        base_width = 12 * scale
+        wall_height = 8 * scale
+        
+        front_wall = (
+            (x - base_width/2, y),
+            (x + base_width/2, y),
+            (x + base_width/2, y - wall_height),
+            (x - base_width/2, y - wall_height)
+        )
+        pygame.draw.polygon(self.screen, owner_color, front_wall)
+        pygame.draw.polygon(self.screen, (255, 255, 255), front_wall, 1)
+        
+        roof_points = [
+            (x, y - wall_height - 5 * scale),
+            (x - base_width/2 - 2 * scale, y - wall_height),
+            (x + base_width/2 + 2 * scale, y - wall_height)
+        ]
+        pygame.draw.polygon(self.screen, (max(0, owner_color[0] - 30), max(0, owner_color[1] - 30), max(0, owner_color[2] - 30)), roof_points)
+        pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+    
+    def _draw_25d_warrior(self, x: float, y: float, colors: dict, scale: float):
+        armor_color = colors.get('armor', (80, 120, 200))
+        helmet_color = colors.get('helmet', (100, 100, 120))
+        sword_color = colors.get('sword', (200, 200, 200))
+        hilt_color = colors.get('hilt', (180, 140, 80))
+        
+        body_width = 6 * scale
+        body_height = 8 * scale
+        
+        body_rect = pygame.Rect(x - body_width/2, y - body_height, body_width, body_height)
+        pygame.draw.rect(self.screen, armor_color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        head_radius = 3 * scale
+        pygame.draw.circle(self.screen, helmet_color, (int(x), int(y - body_height - head_radius)), int(head_radius))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y - body_height - head_radius)), int(head_radius), 1)
+        
+        sword_length = 8 * scale
+        sword_x = x + 5 * scale
+        sword_y = y - body_height + 2 * scale
+        pygame.draw.line(self.screen, sword_color, (sword_x, sword_y), (sword_x, sword_y - sword_length), int(2 * scale))
+        pygame.draw.rect(self.screen, hilt_color, (sword_x - 1 * scale, sword_y, 2 * scale, 2 * scale))
+    
+    def _draw_25d_archer(self, x: float, y: float, colors: dict, scale: float):
+        body_color = colors.get('body', (100, 150, 100))
+        hood_color = colors.get('hood', (80, 120, 80))
+        bow_color = colors.get('bow', (139, 90, 43))
+        arrow_color = colors.get('arrow', (200, 200, 200))
+        
+        body_width = 5 * scale
+        body_height = 7 * scale
+        
+        body_rect = pygame.Rect(x - body_width/2, y - body_height, body_width, body_height)
+        pygame.draw.rect(self.screen, body_color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        head_radius = 3 * scale
+        pygame.draw.circle(self.screen, hood_color, (int(x), int(y - body_height - head_radius)), int(head_radius))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y - body_height - head_radius)), int(head_radius), 1)
+        
+        bow_x = x + 6 * scale
+        bow_y = y - body_height
+        pygame.draw.arc(self.screen, bow_color, (bow_x - 3 * scale, bow_y - 6 * scale, 6 * scale, 12 * scale), -math.pi/2, math.pi/2, int(2 * scale))
+        pygame.draw.line(self.screen, arrow_color, (bow_x, bow_y - 6 * scale), (bow_x, bow_y + 6 * scale), int(1 * scale))
+    
+    def _draw_25d_builder(self, x: float, y: float, colors: dict, scale: float):
+        body_color = colors.get('body', (150, 120, 80))
+        hat_color = colors.get('hat', (180, 140, 100))
+        hammer_color = colors.get('hammer', (150, 150, 150))
+        handle_color = colors.get('handle', (101, 67, 33))
+        
+        body_width = 5 * scale
+        body_height = 7 * scale
+        
+        body_rect = pygame.Rect(x - body_width/2, y - body_height, body_width, body_height)
+        pygame.draw.rect(self.screen, body_color, body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        head_radius = 3 * scale
+        pygame.draw.circle(self.screen, hat_color, (int(x), int(y - body_height - head_radius)), int(head_radius))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y - body_height - head_radius)), int(head_radius), 1)
+        
+        hammer_x = x + 5 * scale
+        hammer_y = y - body_height + 2 * scale
+        pygame.draw.line(self.screen, handle_color, (hammer_x, hammer_y), (hammer_x, hammer_y - 5 * scale), int(2 * scale))
+        pygame.draw.rect(self.screen, hammer_color, (hammer_x - 2 * scale, hammer_y - 7 * scale, 4 * scale, 3 * scale))
+    
+    def _draw_25d_cavalry(self, x: float, y: float, colors: dict, scale: float):
+        body_color = colors.get('body', (120, 80, 150))
+        helmet_color = colors.get('helmet', (100, 80, 120))
+        horse_color = colors.get('horse', (139, 90, 43))
+        sword_color = colors.get('sword', (200, 200, 200))
+        saddle_color = colors.get('saddle', (80, 60, 40))
+        
+        horse_body_width = 10 * scale
+        horse_body_height = 6 * scale
+        horse_leg_height = 6 * scale
+        
+        horse_rect = pygame.Rect(x - horse_body_width/2, y - horse_body_height - horse_leg_height, horse_body_width, horse_body_height)
+        pygame.draw.rect(self.screen, horse_color, horse_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), horse_rect, 1)
+        
+        for i in range(4):
+            leg_x = x - horse_body_width/2 + i * 3 * scale
+            pygame.draw.line(self.screen, horse_color, (leg_x, y - horse_leg_height), (leg_x, y), int(2 * scale))
+        
+        head_x = x + horse_body_width/2 + 2 * scale
+        head_y = y - horse_body_height - horse_leg_height
+        pygame.draw.circle(self.screen, horse_color, (int(head_x), int(head_y)), int(3 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(head_x), int(head_y)), int(3 * scale), 1)
+        
+        saddle_rect = pygame.Rect(x - 2 * scale, y - horse_body_height - horse_leg_height - 2 * scale, 4 * scale, 3 * scale)
+        pygame.draw.rect(self.screen, saddle_color, saddle_rect)
+        
+        rider_body_width = 4 * scale
+        rider_body_height = 5 * scale
+        rider_rect = pygame.Rect(x - rider_body_width/2, y - horse_body_height - horse_leg_height - rider_body_height - 2 * scale, rider_body_width, rider_body_height)
+        pygame.draw.rect(self.screen, body_color, rider_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), rider_rect, 1)
+        
+        rider_head_radius = 2 * scale
+        pygame.draw.circle(self.screen, helmet_color, (int(x), int(y - horse_body_height - horse_leg_height - rider_body_height - 4 * scale)), int(rider_head_radius))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y - horse_body_height - horse_leg_height - rider_body_height - 4 * scale)), int(rider_head_radius), 1)
+        
+        sword_x = x + 5 * scale
+        sword_y = y - horse_body_height - horse_leg_height - 3 * scale
+        pygame.draw.line(self.screen, sword_color, (sword_x, sword_y), (sword_x, sword_y - 6 * scale), int(2 * scale))
+    
+    def _draw_25d_default_unit(self, x: float, y: float, colors: dict, scale: float):
+        body_width = 5 * scale
+        body_height = 7 * scale
+        
+        body_rect = pygame.Rect(x - body_width/2, y - body_height, body_width, body_height)
+        pygame.draw.rect(self.screen, (150, 150, 150), body_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
+        
+        head_radius = 3 * scale
+        pygame.draw.circle(self.screen, (180, 180, 180), (int(x), int(y - body_height - head_radius)), int(head_radius))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y - body_height - head_radius)), int(head_radius), 1)
     
     def _draw_terrain_decoration(self, x: float, y: float, tile: HexTile):
         terrain = tile.terrain
@@ -896,52 +1330,163 @@ class Game:
         
         river_width = 8 * scale
         
+        def get_edge_center(center_x, center_y, direction, hex_size):
+            angle = math.pi / 3 * direction
+            edge_x = center_x + hex_size * math.cos(angle)
+            edge_y = center_y + hex_size * math.sin(angle)
+            return edge_x, edge_y
+        
+        def quadratic_bezier(p0, p1, p2, t):
+            x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t ** 2 * p2[0]
+            y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t ** 2 * p2[1]
+            return x, y
+        
+        def cubic_bezier(p0, p1, p2, p3, t):
+            x = (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * p1[0] + 3 * (1 - t) * t ** 2 * p2[0] + t ** 3 * p3[0]
+            y = (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * p1[1] + 3 * (1 - t) * t ** 2 * p2[1] + t ** 3 * p3[1]
+            return x, y
+        
+        def get_offset_point(point, direction_vector, offset):
+            dx, dy = direction_vector
+            length = math.sqrt(dx * dx + dy * dy)
+            if length > 0:
+                dx /= length
+                dy /= length
+            return (point[0] + dx * offset, point[1] + dy * offset)
+        
+        def get_perpendicular(dx, dy):
+            return -dy, dx
+        
         if tile.river_from is not None and tile.river_to is not None:
             from_dir = tile.river_from
             to_dir = tile.river_to
             
-            from_dx, from_dy = HEX_DIRECTIONS[from_dir]
-            to_dx, to_dy = HEX_DIRECTIONS[to_dir]
+            from_point = get_edge_center(x, y, from_dir, HEX_SIZE * 0.9)
+            to_point = get_edge_center(x, y, to_dir, HEX_SIZE * 0.9)
             
-            from_angle = math.atan2(from_dy, from_dx)
-            to_angle = math.atan2(to_dy, to_dx)
+            dir_diff = (to_dir - from_dir) % 6
+            is_opposite = dir_diff == 3
             
-            from_x = x + from_dx * HEX_SIZE * 0.6
-            from_y = y + from_dy * HEX_SIZE * 0.6 * math.sqrt(3) / 2
-            
-            to_x = x + to_dx * HEX_SIZE * 0.6
-            to_y = y + to_dy * HEX_SIZE * 0.6 * math.sqrt(3) / 2
-            
-            perp_dx = -(to_y - from_y)
-            perp_dy = to_x - from_x
-            perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
-            if perp_len > 0:
-                perp_dx /= perp_len
-                perp_dy /= perp_len
-            
-            p1x = from_x + perp_dx * river_width / 2
-            p1y = from_y + perp_dy * river_width / 2
-            
-            p2x = from_x - perp_dx * river_width / 2
-            p2y = from_y - perp_dy * river_width / 2
-            
-            p3x = to_x - perp_dx * river_width / 2
-            p3y = to_y - perp_dy * river_width / 2
-            
-            p4x = to_x + perp_dx * river_width / 2
-            p4y = to_y + perp_dy * river_width / 2
-            
-            pygame.draw.polygon(self.screen, river_water, 
-                               [(p1x, p1y), (p2x, p2y), (p3x, p3y), (p4x, p4y)])
-            
-            pygame.draw.polygon(self.screen, river_light, 
-                               [(p1x, p1y), (p2x, p2y), (p3x, p3y), (p4x, p4y)], 1)
-            
-            mid_x = (from_x + to_x) / 2
-            mid_y = (from_y + to_y) / 2
-            
-            pygame.draw.circle(self.screen, river_foam, (int(mid_x), int(mid_y)), int(2 * scale))
-            
+            if is_opposite:
+                from_dx, from_dy = HEX_DIRECTIONS[from_dir]
+                to_dx, to_dy = HEX_DIRECTIONS[to_dir]
+                
+                mid_point = ((from_point[0] + to_point[0]) / 2, (from_point[1] + to_point[1]) / 2)
+                
+                cp1 = (from_point[0] - from_dx * HEX_SIZE * 0.3, from_point[1] - from_dy * HEX_SIZE * 0.3)
+                cp2 = (to_point[0] - to_dx * HEX_SIZE * 0.3, to_point[1] - to_dy * HEX_SIZE * 0.3)
+                
+                curve_points = []
+                for t in range(0, 21):
+                    t_val = t / 20.0
+                    pt = cubic_bezier(from_point, cp1, cp2, to_point, t_val)
+                    curve_points.append(pt)
+                
+                perp_dx, perp_dy = get_perpendicular(to_point[0] - from_point[0], to_point[1] - from_point[1])
+                perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                if perp_len > 0:
+                    perp_dx /= perp_len
+                    perp_dy /= perp_len
+                
+                upper_edge = []
+                lower_edge = []
+                
+                for i, pt in enumerate(curve_points):
+                    if i < len(curve_points) - 1:
+                        next_pt = curve_points[i + 1]
+                        tangent_dx = next_pt[0] - pt[0]
+                        tangent_dy = next_pt[1] - pt[1]
+                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                        if perp_len > 0:
+                            perp_dx /= perp_len
+                            perp_dy /= perp_len
+                    else:
+                        prev_pt = curve_points[i - 1]
+                        tangent_dx = pt[0] - prev_pt[0]
+                        tangent_dy = pt[1] - prev_pt[1]
+                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                        if perp_len > 0:
+                            perp_dx /= perp_len
+                            perp_dy /= perp_len
+                    
+                    upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
+                    lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
+                
+                full_polygon = upper_edge + list(reversed(lower_edge))
+                
+                pygame.draw.polygon(self.screen, river_water, full_polygon)
+                
+                for i in range(len(upper_edge) - 1):
+                    pygame.draw.aaline(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
+                    pygame.draw.aaline(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
+                
+                pygame.draw.circle(self.screen, river_foam, (int(mid_point[0]), int(mid_point[1])), int(2 * scale))
+                
+            else:
+                from_dx, from_dy = HEX_DIRECTIONS[from_dir]
+                to_dx, to_dy = HEX_DIRECTIONS[to_dir]
+                
+                control_point_in = (
+                    x - from_dx * HEX_SIZE * 0.5,
+                    y - from_dy * HEX_SIZE * 0.5
+                )
+                control_point_out = (
+                    x - to_dx * HEX_SIZE * 0.5,
+                    y - to_dy * HEX_SIZE * 0.5
+                )
+                
+                mid_control = (
+                    (control_point_in[0] + control_point_out[0]) / 2,
+                    (control_point_in[1] + control_point_out[1]) / 2
+                )
+                
+                curve_center = []
+                for t in range(0, 31):
+                    t_val = t / 30.0
+                    if t_val < 0.5:
+                        pt = quadratic_bezier(from_point, control_point_in, mid_control, t_val * 2)
+                    else:
+                        pt = quadratic_bezier(mid_control, control_point_out, to_point, (t_val - 0.5) * 2)
+                    curve_center.append(pt)
+                
+                upper_edge = []
+                lower_edge = []
+                
+                for i, pt in enumerate(curve_center):
+                    if i < len(curve_center) - 1:
+                        next_pt = curve_center[i + 1]
+                        tangent_dx = next_pt[0] - pt[0]
+                        tangent_dy = next_pt[1] - pt[1]
+                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                        if perp_len > 0:
+                            perp_dx /= perp_len
+                            perp_dy /= perp_len
+                    else:
+                        prev_pt = curve_center[i - 1]
+                        tangent_dx = pt[0] - prev_pt[0]
+                        tangent_dy = pt[1] - prev_pt[1]
+                        perp_dx, perp_dy = get_perpendicular(tangent_dx, tangent_dy)
+                        perp_len = math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy)
+                        if perp_len > 0:
+                            perp_dx /= perp_len
+                            perp_dy /= perp_len
+                    
+                    upper_edge.append((pt[0] + perp_dx * river_width / 2, pt[1] + perp_dy * river_width / 2))
+                    lower_edge.append((pt[0] - perp_dx * river_width / 2, pt[1] - perp_dy * river_width / 2))
+                
+                full_polygon = upper_edge + list(reversed(lower_edge))
+                
+                pygame.draw.polygon(self.screen, river_water, full_polygon)
+                
+                for i in range(len(upper_edge) - 1):
+                    pygame.draw.aaline(self.screen, river_light, upper_edge[i], upper_edge[i + 1], 1)
+                    pygame.draw.aaline(self.screen, river_light, lower_edge[i], lower_edge[i + 1], 1)
+                
+                pygame.draw.circle(self.screen, river_foam, (int(mid_control[0]), int(mid_control[1])), int(2 * scale))
+                
         else:
             pygame.draw.circle(self.screen, river_water, (int(x), int(y)), int(river_width / 2))
             pygame.draw.circle(self.screen, river_light, (int(x), int(y)), int(river_width / 2), 1)
