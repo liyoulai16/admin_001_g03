@@ -143,6 +143,7 @@ class Game:
         
         self.main_menu = MainMenu(self.screen, self.loc, self.animation_manager)
         self.settings_menu = SettingsMenu(self.screen, self.loc, self.animation_manager)
+        self.difficulty_menu = DifficultyMenu(self.screen, self.loc, self.animation_manager)
         self.help_menu = HelpMenu(self.screen, self.loc)
         
         self._popup_initialized = False
@@ -468,6 +469,9 @@ class Game:
         if tile.unit.attacked_this_turn:
             return False
         
+        if tile.building and tile.building.owner != current_player:
+            return True
+        
         neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
         for nq, nr in neighbors:
             neighbor_tile = self.hex_map.get_tile(nq, nr)
@@ -501,6 +505,9 @@ class Game:
     def _get_adjacent_enemy_building(self, tile, current_player):
         if not tile or not tile.unit:
             return None
+        
+        if tile.building and tile.building.owner != current_player:
+            return tile
         
         neighbors = self.hex_map.get_neighbors(tile.q, tile.r)
         for nq, nr in neighbors:
