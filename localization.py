@@ -84,6 +84,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'can_build': 'Can build',
         'status': 'Status',
         'health': 'Health',
+        'hp': 'HP',
         'attack': 'Attack',
         'defense': 'Defense',
         'movement': 'Movement',
@@ -310,6 +311,7 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'can_build': '可建造',
         'status': '单位状态',
         'health': '生命值',
+        'hp': '生命',
         'attack': '攻击力',
         'defense': '防御力',
         'movement': '移动力',
@@ -478,7 +480,7 @@ class Localization:
         if key in TRANSLATIONS.get(self.fallback_language, {}):
             return TRANSLATIONS[self.fallback_language][key]
         
-        return key
+        return str(key)
     
     def get_terrain_name(self, terrain: str) -> str:
         return self.t(terrain)
@@ -503,4 +505,5 @@ class Localization:
             'wood': 'W',
             'food': 'F',
         }
-        return icons.get(resource_type, resource_type)
+        resource_type_str = str(resource_type) if not isinstance(resource_type, str) else resource_type
+        return icons.get(resource_type_str, resource_type_str)

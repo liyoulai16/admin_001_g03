@@ -95,7 +95,7 @@ class UI:
             building_name = self.loc.get_building_name(tile.building.building_type)
             building_text = self.font_medium.render(f"{self.loc.t('building')}: {building_name}", True, TEXT_COLOR)
             screen.blit(building_text, (self.panel_x + 10, 220))
-            hp_text = self.font_small.render(f"HP: {tile.building.health}/{tile.building.max_health}", 
+            hp_text = self.font_small.render(f"{self.loc.t('hp')}: {tile.building.health}/{tile.building.max_health}", 
                                              True, TEXT_COLOR)
             screen.blit(hp_text, (self.panel_x + 20, 245))
         
@@ -103,7 +103,7 @@ class UI:
             unit_name = self.loc.get_unit_name(tile.unit.unit_type)
             unit_text = self.font_medium.render(f"{self.loc.t('unit')}: {unit_name}", True, TEXT_COLOR)
             screen.blit(unit_text, (self.panel_x + 10, 270 if tile.building else 220))
-            hp_text = self.font_small.render(f"HP: {tile.unit.health}/{tile.unit.max_health}", 
+            hp_text = self.font_small.render(f"{self.loc.t('hp')}: {tile.unit.health}/{tile.unit.max_health}", 
                                              True, TEXT_COLOR)
             screen.blit(hp_text, (self.panel_x + 20, 295 if tile.building else 245))
     
