@@ -7,6 +7,7 @@ from config import (
     HEX_SIZE, MAP_ROWS, MAP_COLS,
     BUILDING_INFO, SELECTED_COLOR, GAME_STATES, UI_COLORS,
     TERRAIN_DECORATION_COLORS, BUILDING_DETAIL_COLORS, UNIT_DETAIL_COLORS,
+    BUILDING_LEVEL_COLORS,
     ZOOM_CONFIG, EDGE_SCROLL_CONFIG,
     UI_PANEL_COLOR, TEXT_COLOR, HIGHLIGHT_COLOR,
     EXPAND_TERRITORY_COST, TERRAIN_TYPES, TERRAIN_COLORS, RIVER_COLORS, HEX_DIRECTIONS
@@ -807,11 +808,10 @@ class Game:
             self.add_message(self._get_msg('msg_need_training_building'))
             return
         
-        building_type = self.selected_tile.building.building_type
-        building_info = BUILDING_INFO.get(building_type, {})
-        can_train = building_info.get('can_train', [])
+        building = self.selected_tile.building
+        available_units = building.get_available_units()
         
-        if unit_type not in can_train:
+        if unit_type not in available_units:
             self.add_message(self._get_msg('msg_cannot_train_this_unit'))
             return
         
@@ -916,6 +916,71 @@ class Game:
                 screen_y = y * self.zoom_level + self.map_offset_y
                 self.animation_manager.particle_system.emit(
                     screen_x, screen_y, player.color, count=25, spread=100
+                )
+    
+    def can_upgrade_building(self, tile) -> bool:
+        if not tile:
+            return False
+        
+        player = self.get_current_player()
+        if tile.owner != player:
+            return False
+        
+        if not tile.building:
+            return False
+        
+        if not tile.builder_unit or not tile.builder_unit.can_build:
+            return False
+        
+        building = tile.building
+        if not building.can_upgrade():
+            return False
+        
+        cost = building.get_upgrade_cost()
+        if not player.can_afford(cost):
+            return False
+        
+        return True
+    
+    def upgrade_building(self):
+        if not self.selected_tile:
+            return
+        
+        player = self.get_current_player()
+        if self.selected_tile.owner != player:
+            self.add_message(self._get_msg('msg_can_only_build_own'))
+            return
+        
+        if not self.selected_tile.building:
+            self.add_message(self._get_msg('msg_need_training_building'))
+            return
+        
+        if not self.selected_tile.builder_unit or not self.selected_tile.builder_unit.can_build:
+            self.add_message(self._get_msg('msg_need_builder'))
+            return
+        
+        building = self.selected_tile.building
+        if not building.can_upgrade():
+            self.add_message(self._get_msg('msg_already_max_level'))
+            return
+        
+        cost = building.get_upgrade_cost()
+        if not player.can_afford(cost):
+            self.add_message(self._get_msg('msg_not_enough_resources'))
+            return
+        
+        if player.spend_resources(cost):
+            building.level += 1
+            
+            building_name = self.loc.get_building_name(building.building_type)
+            self.add_message(f"{self._get_msg('msg_upgraded')} {building_name} to Level {building.level}")
+            
+            if self.animation_manager:
+                x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
+                screen_x = x * self.zoom_level + self.map_offset_x
+                screen_y = y * self.zoom_level + self.map_offset_y
+                self.animation_manager.particle_system.emit(
+                    screen_x, screen_y, (255, 200, 50), count=30, spread=120
                 )
     
     def end_turn(self):
@@ -1081,12 +1146,13 @@ class Game:
         can_clear = self._can_clear_enemy_tile(self.selected_tile, current_player)
         can_destroy_building = self._can_destroy_building(self.selected_tile, current_player)
         can_found_town = self._can_found_town(self.selected_tile, current_player)
+        can_upgrade = self.can_upgrade_building(self.selected_tile)
         
         self.ui.draw_resource_panel(self.screen, current_player, self.turn)
         self.ui.draw_tile_info(self.screen, self.selected_tile)
         buttons = self.ui.draw_action_buttons(
             self.screen, self.selected_tile, current_player, 
-            can_expand, can_clear, can_destroy_building, can_found_town
+            can_expand, can_clear, can_destroy_building, can_found_town, can_upgrade
         )
         self.ui.draw_combat_log(self.screen, self.game_messages)
         
@@ -1934,12 +2000,78 @@ class Game:
         
         y_offset += 25
         if tile.building:
-            building_name = self.loc.get_building_name(tile.building.building_type)
+            building = tile.building
+            building_name = self.loc.get_building_name(building.building_type)
             building_text = self.ui.font_medium.render(
                 f"{self.loc.t('building')}: {building_name}", 
-                True, tile.building.owner.color
+                True, building.owner.color
             )
             screen.blit(building_text, (x_offset, y_offset))
+            y_offset += 25
+            
+            level_text = self.ui.font_small.render(
+                f"  {self.loc.t('level')}: {building.level}/{building.max_level}",
+                True, (255, 215, 0)
+            )
+            screen.blit(level_text, (x_offset, y_offset))
+            y_offset += 20
+            
+            building_info = BUILDING_INFO.get(building.building_type, {})
+            if building_info.get('produces'):
+                production_bonus = building.get_production_bonus()
+                resource = building_info['produces']
+                base_amount = building_info.get('production_amount', 0)
+                actual_amount = int(base_amount * production_bonus)
+                
+                production_text = self.ui.font_small.render(
+                    f"  {self.loc.t('production')}: {self.loc.get_resource_name(resource)} +{actual_amount}/{self.loc.t('turn')}",
+                    True, TEXT_COLOR
+                )
+                screen.blit(production_text, (x_offset, y_offset))
+                y_offset += 20
+                
+                if production_bonus > 1.0:
+                    bonus_text = self.ui.font_small.render(
+                        f"    {self.loc.t('bonus')}: +{int((production_bonus - 1) * 100)}%",
+                        True, (100, 255, 100)
+                    )
+                    screen.blit(bonus_text, (x_offset, y_offset))
+                    y_offset += 20
+            
+            can_train = building.get_available_units()
+            if can_train:
+                train_text = self.ui.font_small.render(
+                    f"  {self.loc.t('can_train')}:",
+                    True, TEXT_COLOR
+                )
+                screen.blit(train_text, (x_offset, y_offset))
+                y_offset += 20
+                
+                for unit_type in can_train:
+                    unit_name = self.loc.get_unit_name(unit_type)
+                    unit_text = self.ui.font_small.render(
+                        f"    - {unit_name}",
+                        True, TEXT_COLOR
+                    )
+                    screen.blit(unit_text, (x_offset, y_offset))
+                    y_offset += 18
+            
+            if building.can_upgrade():
+                upgrade_cost = building.get_upgrade_cost()
+                cost_str = ", ".join([f"{self.loc.get_resource_name(k)}: {v}" for k, v in upgrade_cost.items()])
+                
+                upgrade_text = self.ui.font_small.render(
+                    f"  {self.loc.t('upgrade_to')} Lv.{building.level + 1}",
+                    True, (255, 200, 100)
+                )
+                screen.blit(upgrade_text, (x_offset, y_offset))
+                y_offset += 20
+                
+                cost_text = self.ui.font_small.render(
+                    f"    {self.loc.t('cost')}: {cost_str}",
+                    True, TEXT_COLOR
+                )
+                screen.blit(cost_text, (x_offset, y_offset))
         
         close_button_rect = pygame.Rect(
             panel_rect.right - 30, panel_rect.y + 5, 25, 25
@@ -1956,28 +2088,33 @@ class Game:
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
         building_type = building.building_type
+        level = building.level
         
         if building_type == 'town':
-            self._draw_town_icon(x, y, color)
+            self._draw_town_icon(x, y, color, building)
         elif building_type == 'barracks':
-            self._draw_barracks_icon(x, y, color)
+            self._draw_barracks_icon(x, y, color, building)
         elif building_type == 'farm':
-            self._draw_farm_icon(x, y, color)
+            self._draw_farm_icon(x, y, color, building)
         elif building_type == 'tower':
-            self._draw_tower_icon(x, y, color)
+            self._draw_tower_icon(x, y, color, building)
         elif building_type == 'lumbermill':
-            self._draw_lumbermill_icon(x, y, color)
+            self._draw_lumbermill_icon(x, y, color, building)
         else:
-            self._draw_default_building_icon(x, y, color)
+            self._draw_default_building_icon(x, y, color, building)
     
-    def _draw_town_icon(self, x: float, y: float, color: tuple):
+    def _draw_town_icon(self, x: float, y: float, color: tuple, building: Building = None):
         scale = self.zoom_level
+        level = building.level if building else 1
+        
+        level_colors = BUILDING_LEVEL_COLORS.get('town', {}).get(level, {})
         detail_colors = BUILDING_DETAIL_COLORS.get('town', {})
         
-        roof_color = detail_colors.get('roof', (200, 100, 80))
-        wall_color = detail_colors.get('wall', (180, 160, 140))
-        door_color = detail_colors.get('door', (100, 60, 40))
-        window_color = detail_colors.get('window', (255, 255, 200))
+        roof_color = level_colors.get('roof', detail_colors.get('roof', (200, 100, 80)))
+        wall_color = level_colors.get('wall', detail_colors.get('wall', (180, 160, 140)))
+        door_color = level_colors.get('door', detail_colors.get('door', (100, 60, 40)))
+        window_color = level_colors.get('window', detail_colors.get('window', (255, 255, 200)))
+        decoration_color = level_colors.get('decoration', None)
         
         base_y = y - 5 * scale
         base_width = 20 * scale
@@ -1987,6 +2124,45 @@ class Game:
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2 + roof_height, base_width, base_height)
         pygame.draw.rect(self.screen, wall_color, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        
+        if level >= 2:
+            tower_width = 6 * scale
+            tower_height = 10 * scale
+            left_tower_rect = pygame.Rect(x - base_width//2 - tower_width, base_y - base_height//2 + roof_height - 2 * scale, tower_width, base_height + 2 * scale)
+            right_tower_rect = pygame.Rect(x + base_width//2, base_y - base_height//2 + roof_height - 2 * scale, tower_width, base_height + 2 * scale)
+            pygame.draw.rect(self.screen, wall_color, left_tower_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), left_tower_rect, 1)
+            pygame.draw.rect(self.screen, wall_color, right_tower_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), right_tower_rect, 1)
+            
+            if decoration_color:
+                left_tower_roof = [
+                    (x - base_width//2 - tower_width//2, base_y - base_height//2 + roof_height - 8 * scale),
+                    (x - base_width//2 - tower_width, base_y - base_height//2 + roof_height - 2 * scale),
+                    (x - base_width//2, base_y - base_height//2 + roof_height - 2 * scale)
+                ]
+                right_tower_roof = [
+                    (x + base_width//2 + tower_width//2, base_y - base_height//2 + roof_height - 8 * scale),
+                    (x + base_width//2, base_y - base_height//2 + roof_height - 2 * scale),
+                    (x + base_width//2 + tower_width, base_y - base_height//2 + roof_height - 2 * scale)
+                ]
+                pygame.draw.polygon(self.screen, decoration_color, left_tower_roof)
+                pygame.draw.polygon(self.screen, (255, 255, 255), left_tower_roof, 1)
+                pygame.draw.polygon(self.screen, decoration_color, right_tower_roof)
+                pygame.draw.polygon(self.screen, (255, 255, 255), right_tower_roof, 1)
+        
+        if level >= 3:
+            flag_pole_x = x
+            flag_top_y = base_y - base_height//2 - roof_height - 8 * scale
+            pygame.draw.line(self.screen, (80, 60, 40), (flag_pole_x, base_y - base_height//2 - roof_height + 2 * scale), (flag_pole_x, flag_top_y), int(2 * scale))
+            
+            flag_points = [
+                (flag_pole_x, flag_top_y),
+                (flag_pole_x + 8 * scale, flag_top_y + 4 * scale),
+                (flag_pole_x, flag_top_y + 8 * scale)
+            ]
+            pygame.draw.polygon(self.screen, decoration_color if decoration_color else color, flag_points)
+            pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
         
         roof_points = [
             (x, base_y - base_height//2 - roof_height + 2 * scale),
@@ -2004,33 +2180,60 @@ class Game:
         
         door_rect = pygame.Rect(x - 3 * scale, base_y - base_height//2 + roof_height + 5 * scale, 6 * scale, 7 * scale)
         pygame.draw.rect(self.screen, door_color, door_rect)
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - roof_height - 2 * scale))
+            self.screen.blit(level_text, level_rect)
     
-    def _draw_barracks_icon(self, x: float, y: float, color: tuple):
+    def _draw_barracks_icon(self, x: float, y: float, color: tuple, building: Building = None):
         scale = self.zoom_level
+        level = building.level if building else 1
+        
+        level_colors = BUILDING_LEVEL_COLORS.get('barracks', {}).get(level, {})
         detail_colors = BUILDING_DETAIL_COLORS.get('barracks', {})
         
-        wall_color = detail_colors.get('wall', (120, 100, 80))
-        roof_color = detail_colors.get('roof', (180, 120, 60))
-        flag_color = detail_colors.get('flag', (200, 50, 50))
+        wall_color = level_colors.get('wall', detail_colors.get('wall', (120, 100, 80)))
+        roof_color = level_colors.get('roof', detail_colors.get('roof', (180, 120, 60)))
+        flag_color = level_colors.get('flag', detail_colors.get('flag', (200, 50, 50)))
         pole_color = detail_colors.get('pole', (80, 60, 40))
         window_color = detail_colors.get('window', (255, 255, 200))
+        decoration_color = level_colors.get('decoration', None)
         
         base_y = y - 5 * scale
         base_width = 18 * scale
         base_height = 14 * scale
         
+        if level >= 2:
+            base_height += 2 * scale
+            base_width += 2 * scale
+        
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
         pygame.draw.rect(self.screen, wall_color, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
         
+        if level >= 2 and decoration_color:
+            top_rect = pygame.Rect(x - base_width//2 - 2 * scale, base_y - base_height//2 - 3 * scale, base_width + 4 * scale, 3 * scale)
+            pygame.draw.rect(self.screen, decoration_color, top_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), top_rect, 1)
+        
+        if level >= 3:
+            left_banner_rect = pygame.Rect(x - base_width//2 - 4 * scale, base_y - base_height//2 + 2 * scale, 3 * scale, base_height - 4 * scale)
+            right_banner_rect = pygame.Rect(x + base_width//2 + 1 * scale, base_y - base_height//2 + 2 * scale, 3 * scale, base_height - 4 * scale)
+            pygame.draw.rect(self.screen, decoration_color if decoration_color else flag_color, left_banner_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), left_banner_rect, 1)
+            pygame.draw.rect(self.screen, decoration_color if decoration_color else flag_color, right_banner_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), right_banner_rect, 1)
+        
         flag_x = x
-        flag_top_y = base_y - base_height//2 - 6 * scale
+        flag_top_y = base_y - base_height//2 - 8 * scale
         pygame.draw.line(self.screen, pole_color, (flag_x, base_y - base_height//2), (flag_x, flag_top_y), int(2 * scale))
         
         flag_points = [
             (flag_x, flag_top_y),
-            (flag_x + 8 * scale, flag_top_y + 4 * scale),
-            (flag_x, flag_top_y + 8 * scale)
+            (flag_x + 10 * scale, flag_top_y + 5 * scale),
+            (flag_x, flag_top_y + 10 * scale)
         ]
         pygame.draw.polygon(self.screen, flag_color, flag_points)
         pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
@@ -2039,96 +2242,212 @@ class Game:
         pygame.draw.rect(self.screen, window_color, window_rect)
         window_rect2 = pygame.Rect(x + 1 * scale, base_y - 3 * scale, 4 * scale, 4 * scale)
         pygame.draw.rect(self.screen, window_color, window_rect2)
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - 12 * scale))
+            self.screen.blit(level_text, level_rect)
     
-    def _draw_farm_icon(self, x: float, y: float, color: tuple):
+    def _draw_farm_icon(self, x: float, y: float, color: tuple, building: Building = None):
         scale = self.zoom_level
+        level = building.level if building else 1
+        
+        level_colors = BUILDING_LEVEL_COLORS.get('farm', {}).get(level, {})
         detail_colors = BUILDING_DETAIL_COLORS.get('farm', {})
         
-        field_dark = detail_colors.get('field_dark', (60, 120, 40))
+        field_dark = level_colors.get('field', detail_colors.get('field_dark', (60, 120, 40)))
         field_light = detail_colors.get('field_light', (100, 160, 80))
-        crop_color = detail_colors.get('crop', (255, 220, 50))
-        barn_color = detail_colors.get('barn', (180, 140, 100))
+        crop_color = level_colors.get('crop', detail_colors.get('crop', (255, 220, 50)))
+        barn_color = level_colors.get('barn', detail_colors.get('barn', (180, 140, 100)))
+        decoration_color = level_colors.get('decoration', None)
         
         base_y = y - 5 * scale
         field_width = 18 * scale
         field_height = 8 * scale
         
+        if level >= 2:
+            field_width += 4 * scale
+            field_height += 2 * scale
+        
         field_rect = pygame.Rect(x - field_width//2, base_y, field_width, field_height)
         pygame.draw.rect(self.screen, field_dark, field_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), field_rect, 1)
         
-        for i in range(3):
-            plant_x = x - 5 * scale + i * 5 * scale
+        plant_count = 3 + (level - 1) * 2
+        plant_spacing = field_width // plant_count
+        for i in range(plant_count):
+            plant_x = x - field_width//2 + plant_spacing//2 + i * plant_spacing
             plant_y = base_y - 2 * scale
-            pygame.draw.line(self.screen, field_light, (plant_x, plant_y + 2 * scale), (plant_x, plant_y - 3 * scale), int(1 * scale))
-            pygame.draw.circle(self.screen, crop_color, (int(plant_x), int(plant_y - 4 * scale)), int(2 * scale))
+            plant_height = 3 * scale + (level - 1) * scale
+            pygame.draw.line(self.screen, field_light, (plant_x, plant_y + 2 * scale), (plant_x, plant_y - plant_height), int(1 * scale))
+            pygame.draw.circle(self.screen, crop_color, (int(plant_x), int(plant_y - plant_height - 1 * scale)), int(2 * scale + (level - 1) * 0.5 * scale))
         
-        pygame.draw.rect(self.screen, barn_color, (x - 3 * scale, base_y - 8 * scale, 6 * scale, 6 * scale))
-        pygame.draw.rect(self.screen, (255, 255, 255), (x - 3 * scale, base_y - 8 * scale, 6 * scale, 6 * scale), 1)
+        barn_width = 6 * scale + (level - 1) * 2 * scale
+        barn_height = 6 * scale + (level - 1) * 2 * scale
+        pygame.draw.rect(self.screen, barn_color, (x - barn_width//2, base_y - barn_height - 2 * scale, barn_width, barn_height))
+        pygame.draw.rect(self.screen, (255, 255, 255), (x - barn_width//2, base_y - barn_height - 2 * scale, barn_width, barn_height), 1)
+        
+        if level >= 2 and decoration_color:
+            roof_points = [
+                (x, base_y - barn_height - 6 * scale),
+                (x - barn_width//2 - 2 * scale, base_y - barn_height - 2 * scale),
+                (x + barn_width//2 + 2 * scale, base_y - barn_height - 2 * scale)
+            ]
+            pygame.draw.polygon(self.screen, decoration_color, roof_points)
+            pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
+        
+        if level >= 3:
+            windmill_x = x + barn_width//2 + 4 * scale
+            windmill_y = base_y - barn_height - 4 * scale
+            pygame.draw.circle(self.screen, decoration_color if decoration_color else (200, 180, 100), (int(windmill_x), int(windmill_y)), int(3 * scale))
+            for angle in [0, 90, 180, 270]:
+                rad = math.radians(angle)
+                blade_x = windmill_x + math.cos(rad) * 4 * scale
+                blade_y = windmill_y + math.sin(rad) * 4 * scale
+                pygame.draw.line(self.screen, decoration_color if decoration_color else (180, 160, 80), (windmill_x, windmill_y), (blade_x, blade_y), int(2 * scale))
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, base_y - barn_height - 10 * scale))
+            self.screen.blit(level_text, level_rect)
     
-    def _draw_tower_icon(self, x: float, y: float, color: tuple):
+    def _draw_tower_icon(self, x: float, y: float, color: tuple, building: Building = None):
         scale = self.zoom_level
+        level = building.level if building else 1
+        
+        level_colors = BUILDING_LEVEL_COLORS.get('tower', {}).get(level, {})
         detail_colors = BUILDING_DETAIL_COLORS.get('tower', {})
         
-        stone_dark = detail_colors.get('stone_dark', (100, 100, 100))
+        stone_dark = level_colors.get('stone', detail_colors.get('stone_dark', (100, 100, 100)))
         stone_light = detail_colors.get('stone_light', (140, 140, 140))
-        crenellation_color = detail_colors.get('crenellation', (80, 120, 200))
+        crenellation_color = level_colors.get('crenellation', detail_colors.get('crenellation', (80, 120, 200)))
         window_color = detail_colors.get('window', (80, 80, 150))
+        decoration_color = level_colors.get('decoration', None)
         
         base_y = y - 5 * scale
         base_width = 12 * scale
         base_height = 16 * scale
         
+        if level >= 2:
+            base_width += 2 * scale
+            base_height += 4 * scale
+        
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
         pygame.draw.rect(self.screen, stone_dark, base_rect)
         pygame.draw.rect(self.screen, stone_light, base_rect, 1)
         
-        top_width = 16 * scale
+        if level >= 2:
+            left_wing_rect = pygame.Rect(x - base_width//2 - 6 * scale, base_y - base_height//2 + 4 * scale, 6 * scale, base_height - 4 * scale)
+            right_wing_rect = pygame.Rect(x + base_width//2, base_y - base_height//2 + 4 * scale, 6 * scale, base_height - 4 * scale)
+            pygame.draw.rect(self.screen, stone_dark, left_wing_rect)
+            pygame.draw.rect(self.screen, stone_light, left_wing_rect, 1)
+            pygame.draw.rect(self.screen, stone_dark, right_wing_rect)
+            pygame.draw.rect(self.screen, stone_light, right_wing_rect, 1)
+        
+        top_width = 16 * scale + (level - 1) * 2 * scale
         top_height = 4 * scale
         top_rect = pygame.Rect(x - top_width//2, base_y - base_height//2 - top_height, top_width, top_height)
         pygame.draw.rect(self.screen, crenellation_color, top_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), top_rect, 1)
         
-        for i in range(3):
-            notch_x = x - top_width//2 + i * 8 * scale
+        notch_count = 3 + (level - 1)
+        for i in range(notch_count):
+            notch_x = x - top_width//2 + i * (top_width // notch_count)
             notch_rect = pygame.Rect(notch_x, base_y - base_height//2 - top_height - 3 * scale, 4 * scale, 3 * scale)
             pygame.draw.rect(self.screen, crenellation_color, notch_rect)
         
+        if level >= 3 and decoration_color:
+            flag_pole_x = x
+            flag_top_y = base_y - base_height//2 - top_height - 8 * scale
+            pygame.draw.line(self.screen, (80, 60, 40), (flag_pole_x, base_y - base_height//2 - top_height), (flag_pole_x, flag_top_y), int(2 * scale))
+            
+            flag_points = [
+                (flag_pole_x, flag_top_y),
+                (flag_pole_x + 8 * scale, flag_top_y + 4 * scale),
+                (flag_pole_x, flag_top_y + 8 * scale)
+            ]
+            pygame.draw.polygon(self.screen, decoration_color, flag_points)
+            pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
+        
         window_rect = pygame.Rect(x - 2 * scale, base_y - 2 * scale, 4 * scale, 6 * scale)
         pygame.draw.rect(self.screen, window_color, window_rect)
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - top_height - 12 * scale))
+            self.screen.blit(level_text, level_rect)
     
-    def _draw_lumbermill_icon(self, x: float, y: float, color: tuple):
+    def _draw_lumbermill_icon(self, x: float, y: float, color: tuple, building: Building = None):
         scale = self.zoom_level
+        level = building.level if building else 1
+        
+        level_colors = BUILDING_LEVEL_COLORS.get('lumbermill', {}).get(level, {})
         detail_colors = BUILDING_DETAIL_COLORS.get('lumbermill', {})
         
-        wood_dark = detail_colors.get('wood_dark', (101, 67, 33))
+        wood_dark = level_colors.get('wood', detail_colors.get('wood_dark', (101, 67, 33)))
         wood_light = detail_colors.get('wood_light', (139, 90, 43))
-        roof_color = detail_colors.get('roof', (80, 50, 30))
+        roof_color = level_colors.get('roof', detail_colors.get('roof', (80, 50, 30)))
         log_color = detail_colors.get('log', (101, 67, 33))
+        decoration_color = level_colors.get('decoration', None)
         
         base_y = y - 5 * scale
         base_width = 16 * scale
         base_height = 10 * scale
+        
+        if level >= 2:
+            base_width += 4 * scale
+            base_height += 2 * scale
         
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
         pygame.draw.rect(self.screen, wood_light, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
         
         roof_points = [
-            (x, base_y - base_height//2 - 6 * scale),
+            (x, base_y - base_height//2 - 8 * scale),
             (x - base_width//2 - 2 * scale, base_y - base_height//2),
             (x + base_width//2 + 2 * scale, base_y - base_height//2)
         ]
         pygame.draw.polygon(self.screen, roof_color, roof_points)
         pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
         
+        if level >= 2 and decoration_color:
+            chimney_x = x + base_width//4
+            chimney_rect = pygame.Rect(chimney_x - 2 * scale, base_y - base_height//2 - 12 * scale, 4 * scale, 6 * scale)
+            pygame.draw.rect(self.screen, decoration_color, chimney_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), chimney_rect, 1)
+        
         log_y = base_y + base_height//2 + 2 * scale
-        pygame.draw.ellipse(self.screen, log_color, (x - 8 * scale, log_y, 16 * scale, 4 * scale))
-        pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8 * scale, log_y, 16 * scale, 4 * scale), 1)
+        log_count = 1 + (level - 1)
+        for i in range(log_count):
+            current_log_y = log_y + i * 3 * scale
+            pygame.draw.ellipse(self.screen, log_color, (x - 8 * scale, current_log_y, 16 * scale, 4 * scale))
+            pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8 * scale, current_log_y, 16 * scale, 4 * scale), 1)
+        
+        if level >= 3:
+            saw_x = x + base_width//2 + 4 * scale
+            saw_y = base_y
+            pygame.draw.circle(self.screen, decoration_color if decoration_color else (180, 160, 140), (int(saw_x), int(saw_y)), int(4 * scale))
+            for angle in [0, 60, 120, 180, 240, 300]:
+                rad = math.radians(angle)
+                tooth_x = saw_x + math.cos(rad) * 5 * scale
+                tooth_y = saw_y + math.sin(rad) * 5 * scale
+                pygame.draw.line(self.screen, decoration_color if decoration_color else (150, 140, 120), (saw_x, saw_y), (tooth_x, tooth_y), int(1 * scale))
         
         pygame.draw.rect(self.screen, wood_dark, (x - 2 * scale, base_y - 3 * scale, 4 * scale, 4 * scale))
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - 14 * scale))
+            self.screen.blit(level_text, level_rect)
     
-    def _draw_default_building_icon(self, x: float, y: float, color: tuple):
+    def _draw_default_building_icon(self, x: float, y: float, color: tuple, building: Building = None):
+        scale = 1.0
+        level = building.level if building else 1
+        
         icon_size = 16
         icon_rect = pygame.Rect(x - icon_size//2, y - icon_size//2 - 5, icon_size, icon_size)
         pygame.draw.rect(self.screen, color, icon_rect)
@@ -2137,6 +2456,12 @@ class Game:
         text = self.ui.font_small.render("?", True, (255, 255, 255))
         text_rect = text.get_rect(center=icon_rect.center)
         self.screen.blit(text, text_rect)
+        
+        if level > 1:
+            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
+            level_rect = level_text.get_rect(center=(x, y - icon_size//2 - 12))
+            self.screen.blit(level_text, level_rect)
     
     def draw_unit_icon(self, x: float, y: float, unit: Unit):
         color = unit.owner.color
@@ -2536,6 +2861,8 @@ class Game:
                                     self.destroy_building()
                                 elif action == 'found_town':
                                     self.found_town()
+                                elif action == 'upgrade_building':
+                                    self.upgrade_building()
                                 elif action == 'return_to_menu':
                                     if self.settings_popup:
                                         self.settings_popup.hide()

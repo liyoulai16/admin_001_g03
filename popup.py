@@ -425,9 +425,8 @@ class TrainPopup(BasePopup):
         if not self.selected_tile or not self.selected_tile.building:
             return []
         
-        building_type = self.selected_tile.building.building_type
-        building_info = self.BUILDING_INFO.get(building_type, {})
-        return building_info.get('can_train', [])
+        building = self.selected_tile.building
+        return building.get_available_units()
     
     def _create_buttons(self):
         button_width = 220
