@@ -57,8 +57,9 @@ class Player:
         for building in self.buildings:
             if building.building_type in BUILDING_INFO:
                 prod = BUILDING_INFO[building.building_type]['production']
+                bonus = building.get_production_bonus()
                 for res_type, amount in prod.items():
-                    income[res_type] += amount
+                    income[res_type] += int(amount * bonus)
         
         return income
     
@@ -78,18 +79,61 @@ class Player:
 
 
 class Building:
-    def __init__(self, building_type: str, tile_q: int, tile_r: int, owner: Player):
+    def __init__(self, building_type: str, tile_q: int, tile_r: int, owner: Player, level: int = 1):
         self.building_type = building_type
         self.tile_q = tile_q
         self.tile_r = tile_r
         self.owner = owner
         self.health = 100
         self.max_health = 100
+        self.level = level
         
         if building_type in BUILDING_INFO:
             self.name = BUILDING_INFO[building_type]['name']
+            self.max_level = BUILDING_INFO[building_type].get('max_level', 3)
         else:
             self.name = building_type
+            self.max_level = 3
+    
+    def can_upgrade(self) -> bool:
+        if self.level >= self.max_level:
+            return False
+        if self.building_type not in BUILDING_INFO:
+            return False
+        
+        upgrade_info = BUILDING_INFO[self.building_type].get('upgrade_cost', {})
+        if self.level not in upgrade_info:
+            return False
+        
+        return True
+    
+    def get_upgrade_cost(self) -> Dict[str, int]:
+        if self.building_type not in BUILDING_INFO:
+            return {}
+        
+        upgrade_info = BUILDING_INFO[self.building_type].get('upgrade_cost', {})
+        return upgrade_info.get(self.level, {})
+    
+    def get_production_bonus(self) -> float:
+        if self.building_type not in BUILDING_INFO:
+            return 1.0
+        
+        production_bonus = BUILDING_INFO[self.building_type].get('production_bonus', {})
+        return production_bonus.get(self.level, 1.0)
+    
+    def get_available_units(self) -> List[str]:
+        if self.building_type not in BUILDING_INFO:
+            return []
+        
+        can_train = BUILDING_INFO[self.building_type].get('can_train', [])
+        unlock_at_level = BUILDING_INFO[self.building_type].get('unlock_at_level', {})
+        
+        available = can_train.copy()
+        for unit_type, min_level in unlock_at_level.items():
+            if self.level >= min_level:
+                available.append(unit_type)
+        
+        return available
 
 
 class Unit:

@@ -34,6 +34,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'builder': 'Builder',
         'cavalry': 'Cavalry',
         'settler': 'Settler',
+        'spearman': 'Spearman',
+        'swordsman': 'Swordsman',
         
         'tile_info': 'Tile Info',
         'no_tile_selected': 'No tile selected',
@@ -53,6 +55,13 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'river_through': 'River flows through',
         'river_start': 'River starts here',
         'river_end': 'River ends here',
+        
+        'level': 'Level',
+        'production': 'Production',
+        'bonus': 'Bonus',
+        'can_train': 'Can Train',
+        'upgrade_to': 'Upgrade to',
+        'cost': 'Cost',
         
         'end_turn': 'End Turn',
         'build': 'Build',
@@ -246,6 +255,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'builder': '建造者',
         'cavalry': '骑兵',
         'settler': '开拓者',
+        'spearman': '枪兵',
+        'swordsman': '剑士',
         
         'tile_info': '地块信息',
         'no_tile_selected': '未选中地块',
@@ -265,6 +276,13 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'river_through': '河流穿过',
         'river_start': '河流起点',
         'river_end': '河流终点',
+        
+        'level': '等级',
+        'production': '产出',
+        'bonus': '加成',
+        'can_train': '可训练',
+        'upgrade_to': '升级至',
+        'cost': '消耗',
         
         'end_turn': '结束回合',
         'build': '建造建筑',

@@ -146,6 +146,127 @@ BUILDING_DETAIL_COLORS = {
     },
 }
 
+BUILDING_LEVEL_COLORS = {
+    'town': {
+        1: {
+            'roof': (200, 100, 80),
+            'wall': (180, 160, 140),
+            'door': (100, 60, 40),
+            'window': (255, 255, 200),
+            'decoration': None,
+        },
+        2: {
+            'roof': (220, 120, 100),
+            'wall': (200, 180, 160),
+            'door': (120, 80, 60),
+            'window': (255, 255, 220),
+            'decoration': (200, 160, 60),
+        },
+        3: {
+            'roof': (240, 140, 120),
+            'wall': (220, 200, 180),
+            'door': (140, 100, 80),
+            'window': (255, 255, 240),
+            'decoration': (255, 200, 50),
+        },
+    },
+    'barracks': {
+        1: {
+            'wall': (120, 100, 80),
+            'roof': (180, 120, 60),
+            'flag': (200, 50, 50),
+            'pole': (80, 60, 40),
+            'window': (255, 255, 200),
+            'decoration': None,
+        },
+        2: {
+            'wall': (140, 120, 100),
+            'roof': (200, 140, 80),
+            'flag': (220, 70, 70),
+            'pole': (100, 80, 60),
+            'window': (255, 255, 220),
+            'decoration': (180, 140, 80),
+        },
+        3: {
+            'wall': (160, 140, 120),
+            'roof': (220, 160, 100),
+            'flag': (240, 90, 90),
+            'pole': (120, 100, 80),
+            'window': (255, 255, 240),
+            'decoration': (255, 180, 50),
+        },
+    },
+    'farm': {
+        1: {
+            'field_dark': (60, 120, 40),
+            'field_light': (100, 160, 80),
+            'crop': (255, 220, 50),
+            'barn': (180, 140, 100),
+            'decoration': None,
+        },
+        2: {
+            'field_dark': (80, 140, 60),
+            'field_light': (120, 180, 100),
+            'crop': (255, 230, 70),
+            'barn': (200, 160, 120),
+            'decoration': (150, 120, 80),
+        },
+        3: {
+            'field_dark': (100, 160, 80),
+            'field_light': (140, 200, 120),
+            'crop': (255, 240, 90),
+            'barn': (220, 180, 140),
+            'decoration': (200, 180, 60),
+        },
+    },
+    'tower': {
+        1: {
+            'stone_dark': (100, 100, 100),
+            'stone_light': (140, 140, 140),
+            'crenellation': (80, 120, 200),
+            'window': (80, 80, 150),
+            'decoration': None,
+        },
+        2: {
+            'stone_dark': (120, 120, 120),
+            'stone_light': (160, 160, 160),
+            'crenellation': (100, 140, 220),
+            'window': (100, 100, 170),
+            'decoration': (150, 150, 200),
+        },
+        3: {
+            'stone_dark': (140, 140, 140),
+            'stone_light': (180, 180, 180),
+            'crenellation': (120, 160, 240),
+            'window': (120, 120, 190),
+            'decoration': (200, 200, 255),
+        },
+    },
+    'lumbermill': {
+        1: {
+            'wood_dark': (101, 67, 33),
+            'wood_light': (139, 90, 43),
+            'roof': (80, 50, 30),
+            'log': (101, 67, 33),
+            'decoration': None,
+        },
+        2: {
+            'wood_dark': (121, 87, 53),
+            'wood_light': (159, 110, 63),
+            'roof': (100, 70, 50),
+            'log': (121, 87, 53),
+            'decoration': (180, 140, 80),
+        },
+        3: {
+            'wood_dark': (141, 107, 73),
+            'wood_light': (179, 130, 83),
+            'roof': (120, 90, 70),
+            'log': (141, 107, 73),
+            'decoration': (220, 180, 100),
+        },
+    },
+}
+
 UNIT_DETAIL_COLORS = {
     'warrior': {
         'armor': (80, 120, 200),
@@ -178,6 +299,19 @@ UNIT_DETAIL_COLORS = {
         'flag': (80, 120, 200),
         'pack': (160, 140, 120),
     },
+    'spearman': {
+        'armor': (60, 150, 100),
+        'helmet': (80, 120, 100),
+        'spear': (180, 160, 140),
+        'hilt': (150, 100, 50),
+    },
+    'swordsman': {
+        'armor': (180, 80, 80),
+        'helmet': (150, 60, 60),
+        'sword': (220, 220, 220),
+        'hilt': (200, 160, 80),
+        'shield': (100, 60, 40),
+    },
 }
 
 TERRAIN_NAMES = {
@@ -198,39 +332,97 @@ FEATURE_NAMES = {
 BUILDING_INFO = {
     'town': {
         'name': 'Town',
+        'max_level': 3,
         'cost': {'gold': 100, 'wood': 50},
+        'upgrade_cost': {
+            1: {'gold': 80, 'wood': 40},
+            2: {'gold': 120, 'wood': 60},
+        },
         'production': {'gold': 10, 'wood': 0, 'food': 5},
+        'production_bonus': {
+            1: 1.0,
+            2: 1.5,
+            3: 2.0,
+        },
         'description': 'Produces gold and food per turn',
         'can_train': ['builder', 'settler'],
+        'unlock_at_level': {},
     },
     'barracks': {
         'name': 'Barracks',
+        'max_level': 3,
         'cost': {'gold': 80, 'wood': 60},
+        'upgrade_cost': {
+            1: {'gold': 60, 'wood': 50},
+            2: {'gold': 100, 'wood': 80},
+        },
         'production': {'gold': 0, 'wood': 0, 'food': 0},
+        'production_bonus': {
+            1: 1.0,
+            2: 1.0,
+            3: 1.0,
+        },
         'description': 'Allows training military units',
         'can_train': ['warrior', 'archer', 'cavalry'],
+        'unlock_at_level': {
+            'spearman': 2,
+            'swordsman': 3,
+        },
     },
     'farm': {
         'name': 'Farm',
+        'max_level': 3,
         'cost': {'gold': 50, 'wood': 30},
+        'upgrade_cost': {
+            1: {'gold': 40, 'wood': 25},
+            2: {'gold': 60, 'wood': 40},
+        },
         'production': {'gold': 0, 'wood': 0, 'food': 10},
+        'production_bonus': {
+            1: 1.0,
+            2: 1.5,
+            3: 2.0,
+        },
         'description': 'Produces food per turn',
         'can_train': [],
+        'unlock_at_level': {},
     },
     'tower': {
         'name': 'Tower',
+        'max_level': 3,
         'cost': {'gold': 60, 'wood': 40},
+        'upgrade_cost': {
+            1: {'gold': 50, 'wood': 35},
+            2: {'gold': 80, 'wood': 60},
+        },
         'production': {'gold': 0, 'wood': 0, 'food': 0},
+        'production_bonus': {
+            1: 1.0,
+            2: 1.0,
+            3: 1.0,
+        },
         'description': 'Provides defense bonus',
         'can_train': [],
+        'unlock_at_level': {},
     },
     'lumbermill': {
         'name': 'Lumbermill',
+        'max_level': 3,
         'cost': {'gold': 40, 'wood': 20},
+        'upgrade_cost': {
+            1: {'gold': 35, 'wood': 25},
+            2: {'gold': 50, 'wood': 35},
+        },
         'production': {'gold': 0, 'wood': 8, 'food': 0},
+        'production_bonus': {
+            1: 1.0,
+            2: 1.5,
+            3: 2.0,
+        },
         'description': 'Produces wood per turn',
         'can_train': [],
         'required_feature': ['forest'],
+        'unlock_at_level': {},
     },
 }
 
@@ -285,6 +477,26 @@ UNIT_INFO = {
         'movement': 2,
         'can_build': False,
         'can_settle': True,
+        'is_melee': True,
+    },
+    'spearman': {
+        'name': 'Spearman',
+        'cost': {'gold': 35, 'wood': 15, 'food': 25},
+        'attack': 25,
+        'defense': 12,
+        'health': 120,
+        'movement': 2,
+        'can_build': False,
+        'is_melee': True,
+    },
+    'swordsman': {
+        'name': 'Swordsman',
+        'cost': {'gold': 50, 'wood': 20, 'food': 35},
+        'attack': 32,
+        'defense': 15,
+        'health': 150,
+        'movement': 2,
+        'can_build': False,
         'is_melee': True,
     },
 }

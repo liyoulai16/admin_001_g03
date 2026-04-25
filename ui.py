@@ -112,7 +112,8 @@ class UI:
                             can_expand_territory: bool = False,
                             can_clear_enemy_tile: bool = False,
                             can_destroy_building: bool = False,
-                            can_found_town: bool = False) -> List[Dict]:
+                            can_found_town: bool = False,
+                            can_upgrade_building: bool = False) -> List[Dict]:
         self.buttons = []
         
         button_y = 320
@@ -200,12 +201,19 @@ class UI:
             
             if selected_tile.building:
                 from config import BUILDING_INFO, UNIT_INFO
-                building_type = selected_tile.building.building_type
+                building = selected_tile.building
+                building_type = building.building_type
                 building_info = BUILDING_INFO.get(building_type, {})
-                can_train = building_info.get('can_train', [])
+                
+                level_text = f"Lv.{building.level}"
+                level_surface = self.font_medium.render(level_text, True, (255, 200, 50))
+                screen.blit(level_surface, (self.panel_x + 10, button_y + 5))
+                button_y += 30
+                
+                available_units = building.get_available_units()
                 
                 can_train_now = False
-                for unit_type in can_train:
+                for unit_type in available_units:
                     unit_info = UNIT_INFO.get(unit_type, {})
                     is_builder = unit_info.get('can_build', False)
                     if is_builder:
@@ -217,7 +225,7 @@ class UI:
                             can_train_now = True
                             break
                 
-                if can_train and can_train_now:
+                if available_units and can_train_now:
                     train_button = {
                         'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
                         'text': self.loc.t('train'),
@@ -226,6 +234,20 @@ class UI:
                     }
                     self.buttons.append(train_button)
                     self._draw_button(screen, train_button)
+                    button_y += button_height + 10
+                
+                if can_upgrade_building:
+                    upgrade_cost = building.get_upgrade_cost()
+                    cost_str = ", ".join([f"{self.loc.get_resource_icon(k)}{v}" for k, v in upgrade_cost.items()])
+                    upgrade_text = f"{self.loc.t('upgrade')} ({cost_str})"
+                    upgrade_button = {
+                        'rect': pygame.Rect(self.panel_x + 10, button_y, button_width, button_height),
+                        'text': upgrade_text,
+                        'action': 'upgrade_building',
+                        'color': (180, 150, 60)
+                    }
+                    self.buttons.append(upgrade_button)
+                    self._draw_button(screen, upgrade_button)
                     button_y += button_height + 10
             
             if selected_tile.unit:
