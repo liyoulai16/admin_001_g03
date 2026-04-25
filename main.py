@@ -973,7 +973,7 @@ class Game:
             building.level += 1
             
             building_name = self.loc.get_building_name(building.building_type)
-            self.add_message(f"{self._get_msg('msg_upgraded')} {building_name} to Level {building.level}")
+            self.add_message(f"{self._get_msg('msg_upgraded')} {building_name} {self.loc.t('upgrade_to')} {self.loc.t('level')} {building.level}")
             
             if self.animation_manager:
                 x, y = self.hex_map.hex_to_pixel(self.selected_tile.q, self.selected_tile.r)
@@ -2027,7 +2027,7 @@ class Game:
                 next_production_bonus = production_bonus_info.get(next_level, current_production_bonus)
                 
                 current_level_text = self.ui.font_small.render(
-                    f"  {self.loc.t('current_level')} Lv.{current_level}:",
+                    f"  {self.loc.t('current_level')} {current_level}:",
                     True, TEXT_COLOR
                 )
                 screen.blit(current_level_text, (x_offset, y_offset))
@@ -2054,7 +2054,7 @@ class Game:
                 
                 if building.can_upgrade() and next_production_bonus != current_production_bonus:
                     next_level_text = self.ui.font_small.render(
-                        f"  {self.loc.t('next_level')} Lv.{next_level}:",
+                        f"  {self.loc.t('next_level')} {next_level}:",
                         True, (255, 200, 100)
                     )
                     screen.blit(next_level_text, (x_offset, y_offset))
@@ -2105,7 +2105,7 @@ class Game:
                 cost_str = ", ".join([f"{self.loc.get_resource_name(k)}: {v}" for k, v in upgrade_cost.items()])
                 
                 upgrade_text = self.ui.font_small.render(
-                    f"  {self.loc.t('upgrade_to')} Lv.{building.level + 1}",
+                    f"  {self.loc.t('upgrade_to')} {building.level + 1}",
                     True, (255, 200, 100)
                 )
                 screen.blit(upgrade_text, (x_offset, y_offset))
@@ -2226,7 +2226,7 @@ class Game:
         pygame.draw.rect(self.screen, door_color, door_rect)
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - roof_height - 2 * scale))
             self.screen.blit(level_text, level_rect)
@@ -2288,7 +2288,7 @@ class Game:
         pygame.draw.rect(self.screen, window_color, window_rect2)
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - 12 * scale))
             self.screen.blit(level_text, level_rect)
@@ -2352,7 +2352,7 @@ class Game:
                 pygame.draw.line(self.screen, decoration_color if decoration_color else (180, 160, 80), (windmill_x, windmill_y), (blade_x, blade_y), int(2 * scale))
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, base_y - barn_height - 10 * scale))
             self.screen.blit(level_text, level_rect)
@@ -2419,7 +2419,7 @@ class Game:
         pygame.draw.rect(self.screen, window_color, window_rect)
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - top_height - 12 * scale))
             self.screen.blit(level_text, level_rect)
@@ -2483,7 +2483,7 @@ class Game:
         pygame.draw.rect(self.screen, wood_dark, (x - 2 * scale, base_y - 3 * scale, 4 * scale, 4 * scale))
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, base_y - base_height//2 - 14 * scale))
             self.screen.blit(level_text, level_rect)
@@ -2502,7 +2502,7 @@ class Game:
         self.screen.blit(text, text_rect)
         
         if level > 1:
-            level_font = pygame.font.SysFont('Arial', int(8 * scale))
+            level_font = pygame.font.Font(None, int(8 * scale))
             level_text = level_font.render(f'Lv.{level}', True, (255, 215, 0))
             level_rect = level_text.get_rect(center=(x, y - icon_size//2 - 12))
             self.screen.blit(level_text, level_rect)
