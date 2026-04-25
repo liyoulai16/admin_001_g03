@@ -60,8 +60,11 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'production': 'Production',
         'bonus': 'Bonus',
         'can_train': 'Can Train',
+        'upgrade': 'Upgrade',
         'upgrade_to': 'Upgrade to',
         'cost': 'Cost',
+        'next_level': 'Next Level',
+        'current_level': 'Current Level',
         
         'end_turn': 'End Turn',
         'build': 'Build',
@@ -129,6 +132,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_new_turn_gained': 'New turn! Gained:',
         'msg_game_over': 'Game over!',
         'msg_wins': 'wins!',
+        'msg_already_max_level': 'Building already at maximum level!',
+        'msg_upgraded': 'Upgraded',
         
         'settings': 'Settings',
         'language': 'Language',
@@ -281,8 +286,11 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'production': '产出',
         'bonus': '加成',
         'can_train': '可训练',
+        'upgrade': '升级',
         'upgrade_to': '升级至',
         'cost': '消耗',
+        'next_level': '下一级',
+        'current_level': '当前等级',
         
         'end_turn': '结束回合',
         'build': '建造建筑',
@@ -350,6 +358,8 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'msg_new_turn_gained': '新回合！获得资源:',
         'msg_game_over': '游戏结束！',
         'msg_wins': '获胜！',
+        'msg_already_max_level': '建筑已达到最高等级！',
+        'msg_upgraded': '已升级',
         
         'settings': '设置',
         'language': '语言',
