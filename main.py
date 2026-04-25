@@ -2017,26 +2017,70 @@ class Game:
             y_offset += 20
             
             building_info = BUILDING_INFO.get(building.building_type, {})
-            if building_info.get('produces'):
-                production_bonus = building.get_production_bonus()
-                resource = building_info['produces']
-                base_amount = building_info.get('production_amount', 0)
-                actual_amount = int(base_amount * production_bonus)
+            production = building_info.get('production', {})
+            if production and any(v > 0 for v in production.values()):
+                current_level = building.level
+                next_level = current_level + 1
                 
-                production_text = self.ui.font_small.render(
-                    f"  {self.loc.t('production')}: {self.loc.get_resource_name(resource)} +{actual_amount}/{self.loc.t('turn')}",
+                current_production_bonus = building.get_production_bonus()
+                production_bonus_info = building_info.get('production_bonus', {})
+                next_production_bonus = production_bonus_info.get(next_level, current_production_bonus)
+                
+                current_level_text = self.ui.font_small.render(
+                    f"  {self.loc.t('current_level')} Lv.{current_level}:",
                     True, TEXT_COLOR
                 )
-                screen.blit(production_text, (x_offset, y_offset))
+                screen.blit(current_level_text, (x_offset, y_offset))
                 y_offset += 20
                 
-                if production_bonus > 1.0:
+                for resource, base_amount in production.items():
+                    if base_amount > 0:
+                        actual_amount = int(base_amount * current_production_bonus)
+                        resource_name = self.loc.get_resource_name(resource)
+                        prod_text = self.ui.font_small.render(
+                            f"    {resource_name}: +{actual_amount}/{self.loc.t('turn')}",
+                            True, (100, 200, 255)
+                        )
+                        screen.blit(prod_text, (x_offset, y_offset))
+                        y_offset += 18
+                
+                if current_production_bonus > 1.0:
                     bonus_text = self.ui.font_small.render(
-                        f"    {self.loc.t('bonus')}: +{int((production_bonus - 1) * 100)}%",
+                        f"    {self.loc.t('bonus')}: +{int((current_production_bonus - 1) * 100)}%",
                         True, (100, 255, 100)
                     )
                     screen.blit(bonus_text, (x_offset, y_offset))
+                    y_offset += 18
+                
+                if building.can_upgrade() and next_production_bonus != current_production_bonus:
+                    next_level_text = self.ui.font_small.render(
+                        f"  {self.loc.t('next_level')} Lv.{next_level}:",
+                        True, (255, 200, 100)
+                    )
+                    screen.blit(next_level_text, (x_offset, y_offset))
                     y_offset += 20
+                    
+                    for resource, base_amount in production.items():
+                        if base_amount > 0:
+                            current_amount = int(base_amount * current_production_bonus)
+                            next_amount = int(base_amount * next_production_bonus)
+                            resource_name = self.loc.get_resource_name(resource)
+                            increase = next_amount - current_amount
+                            prod_text = self.ui.font_small.render(
+                                f"    {resource_name}: +{next_amount}/{self.loc.t('turn')} (+{increase})",
+                                True, (255, 220, 100)
+                            )
+                            screen.blit(prod_text, (x_offset, y_offset))
+                            y_offset += 18
+                    
+                    next_bonus_increase = int((next_production_bonus - current_production_bonus) * 100)
+                    if next_bonus_increase > 0:
+                        next_bonus_text = self.ui.font_small.render(
+                            f"    {self.loc.t('bonus')}: +{int((next_production_bonus - 1) * 100)}% (+{next_bonus_increase}%)",
+                            True, (150, 255, 150)
+                        )
+                        screen.blit(next_bonus_text, (x_offset, y_offset))
+                        y_offset += 18
             
             can_train = building.get_available_units()
             if can_train:
