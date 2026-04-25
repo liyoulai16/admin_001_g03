@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from config import PLAYER_START_RESOURCES, AI_START_RESOURCES, BUILDING_INFO, UNIT_INFO, TERRAIN_TYPES
 
 
