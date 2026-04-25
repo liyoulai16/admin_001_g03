@@ -5,7 +5,9 @@ from typing import Dict, Tuple, Optional, List
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS, BACKGROUND_COLOR, 
     HEX_SIZE, MAP_ROWS, MAP_COLS,
-    BUILDING_INFO, SELECTED_COLOR, GAME_STATES, UI_COLORS
+    BUILDING_INFO, SELECTED_COLOR, GAME_STATES, UI_COLORS,
+    TERRAIN_DECORATION_COLORS, BUILDING_DETAIL_COLORS, UNIT_DETAIL_COLORS,
+    ZOOM_CONFIG, EDGE_SCROLL_CONFIG
 )
 from hex_map import HexMap, HexTile
 from terrain_generator import TerrainGenerator
@@ -51,6 +53,18 @@ class Game:
         self.selected_unit: Optional[Unit] = None
         self.map_offset_x = 50
         self.map_offset_y = 50
+        
+        self.zoom_level = ZOOM_CONFIG['default_zoom']
+        self.min_zoom = ZOOM_CONFIG['min_zoom']
+        self.max_zoom = ZOOM_CONFIG['max_zoom']
+        self.zoom_step = ZOOM_CONFIG['zoom_step']
+        self.scroll_speed = EDGE_SCROLL_CONFIG['scroll_speed']
+        self.edge_threshold = EDGE_SCROLL_CONFIG['edge_threshold']
+        
+        self.unit_detail_panel_visible = False
+        self.unit_detail_panel_rect = pygame.Rect(
+            SCREEN_WIDTH - 300, SCREEN_HEIGHT - 350, 280, 320
+        )
         
         self.unit_selection_pending: bool = False
         self.unit_selection_tile: Optional[HexTile] = None
@@ -179,8 +193,8 @@ class Game:
         return self.players[self.current_player_idx]
     
     def get_screen_to_hex(self, screen_x: int, screen_y: int) -> Tuple[int, int]:
-        x = screen_x - self.map_offset_x
-        y = screen_y - self.map_offset_y
+        x = (screen_x - self.map_offset_x) / self.zoom_level
+        y = (screen_y - self.map_offset_y) / self.zoom_level
         return self.hex_map.pixel_to_hex(x, y)
     
     def handle_tile_click(self, q: int, r: int):
@@ -648,13 +662,20 @@ class Game:
             dt = self.animation_manager.get_dt()
             self.ui.update_menu_animations(dt)
         
+        self._handle_edge_scroll()
+        
         if self.hex_map:
             for (q, r), tile in self.hex_map.tiles.items():
                 x, y = self.hex_map.hex_to_pixel(q, r)
-                screen_x = x + self.map_offset_x
-                screen_y = y + self.map_offset_y
+                screen_x = x * self.zoom_level + self.map_offset_x
+                screen_y = y * self.zoom_level + self.map_offset_y
                 
-                corners = self.hex_map.get_hex_corners(screen_x, screen_y)
+                if screen_x < -HEX_SIZE * self.zoom_level * 2 or screen_x > SCREEN_WIDTH + HEX_SIZE * self.zoom_level * 2:
+                    continue
+                if screen_y < -HEX_SIZE * self.zoom_level * 2 or screen_y > SCREEN_HEIGHT + HEX_SIZE * self.zoom_level * 2:
+                    continue
+                
+                corners = self._get_scaled_hex_corners(screen_x, screen_y)
                 
                 tile_scale = 1.0
                 if self.animation_manager and (q, r) in self.animation_manager.tile_animations:
@@ -674,6 +695,8 @@ class Game:
                 pygame.draw.polygon(self.screen, tile.get_color(), corners)
                 pygame.draw.polygon(self.screen, tile.get_border_color(), corners, 2)
                 
+                self._draw_terrain_decoration(screen_x, screen_y, tile)
+                
                 if tile.building:
                     self.draw_building_icon(screen_x, screen_y, tile.building)
                 
@@ -681,17 +704,17 @@ class Game:
                     unit_id = id(tile.unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self.draw_unit_icon(anim_pos[0], anim_pos[1] + 5, tile.unit)
+                        self.draw_unit_icon(anim_pos[0], anim_pos[1] + 5 * self.zoom_level, tile.unit)
                     else:
-                        self.draw_unit_icon(screen_x, screen_y + 5, tile.unit)
+                        self.draw_unit_icon(screen_x, screen_y + 5 * self.zoom_level, tile.unit)
                 
                 if tile.builder_unit:
                     unit_id = id(tile.builder_unit)
                     if self.animation_manager and self.animation_manager.is_unit_animating(unit_id):
                         anim_pos = self.animation_manager.get_unit_position(unit_id, (screen_x, screen_y))
-                        self.draw_unit_icon(anim_pos[0] - 6, anim_pos[1] - 5, tile.builder_unit)
+                        self.draw_unit_icon(anim_pos[0] - 6 * self.zoom_level, anim_pos[1] - 5 * self.zoom_level, tile.builder_unit)
                     else:
-                        self.draw_unit_icon(screen_x - 6, screen_y - 5, tile.builder_unit)
+                        self.draw_unit_icon(screen_x - 6 * self.zoom_level, screen_y - 5 * self.zoom_level, tile.builder_unit)
         
         if self.animation_manager:
             self.animation_manager.particle_system.draw(self.screen)
@@ -711,7 +734,196 @@ class Game:
         
         self._draw_unit_selection_buttons(self.screen)
         
+        if self.unit_detail_panel_visible and self.selected_unit:
+            self._draw_unit_detail_panel(self.screen)
+        
         self._draw_popups()
+    
+    def _get_scaled_hex_corners(self, center_x: float, center_y: float) -> List[Tuple[float, float]]:
+        corners = []
+        scaled_hex_size = HEX_SIZE * self.zoom_level
+        for i in range(6):
+            angle = math.pi / 3 * i
+            x = center_x + scaled_hex_size * math.cos(angle)
+            y = center_y + scaled_hex_size * math.sin(angle)
+            corners.append((x, y))
+        return corners
+    
+    def _draw_terrain_decoration(self, x: float, y: float, tile: HexTile):
+        terrain = tile.terrain
+        decoration_colors = TERRAIN_DECORATION_COLORS.get(terrain, {})
+        scale = self.zoom_level
+        
+        if terrain == 'forest':
+            tree_dark = decoration_colors.get('tree_dark', (30, 80, 30))
+            tree_light = decoration_colors.get('tree_light', (70, 140, 70))
+            trunk = decoration_colors.get('trunk', (101, 67, 33))
+            
+            trunk_rect = pygame.Rect(x - 2 * scale, y + 5 * scale, 4 * scale, 8 * scale)
+            pygame.draw.rect(self.screen, trunk, trunk_rect)
+            
+            foliage_y = y - 5 * scale
+            pygame.draw.circle(self.screen, tree_dark, (int(x - 5 * scale), int(foliage_y)), int(8 * scale))
+            pygame.draw.circle(self.screen, tree_light, (int(x + 3 * scale), int(foliage_y - 3 * scale)), int(7 * scale))
+            pygame.draw.circle(self.screen, tree_dark, (int(x), int(foliage_y)), int(6 * scale))
+        
+        elif terrain == 'water':
+            wave_dark = decoration_colors.get('wave_dark', (40, 110, 170))
+            wave_light = decoration_colors.get('wave_light', (100, 180, 240))
+            
+            for i in range(3):
+                offset_x = -8 * scale + i * 8 * scale
+                pygame.draw.arc(self.screen, wave_light, 
+                               (x + offset_x, y - 5 * scale, 12 * scale, 6 * scale),
+                               0, math.pi, 1)
+            
+            pygame.draw.circle(self.screen, wave_dark, (int(x + 10 * scale), int(y + 5 * scale)), int(3 * scale))
+        
+        elif terrain == 'mountain':
+            rock_dark = decoration_colors.get('rock_dark', (100, 90, 80))
+            rock_light = decoration_colors.get('rock_light', (180, 170, 160))
+            snow = decoration_colors.get('snow', (250, 250, 255))
+            
+            mountain_points = [
+                (x, y - 15 * scale),
+                (x - 12 * scale, y + 8 * scale),
+                (x + 12 * scale, y + 8 * scale)
+            ]
+            pygame.draw.polygon(self.screen, rock_dark, mountain_points)
+            pygame.draw.polygon(self.screen, rock_light, mountain_points, 1)
+            
+            snow_points = [
+                (x, y - 15 * scale),
+                (x - 6 * scale, y - 5 * scale),
+                (x + 6 * scale, y - 5 * scale)
+            ]
+            pygame.draw.polygon(self.screen, snow, snow_points)
+        
+        elif terrain == 'plain':
+            grass_dark = decoration_colors.get('grass_dark', (130, 160, 80))
+            flower = decoration_colors.get('flower', (255, 220, 100))
+            
+            for i in range(2):
+                gx = x + (-5 + i * 10) * scale
+                pygame.draw.line(self.screen, grass_dark, 
+                                (gx, y + 5 * scale), (gx, y - 3 * scale), int(1 * scale))
+            
+            pygame.draw.circle(self.screen, flower, (int(x + 8 * scale), int(y - 2 * scale)), int(2 * scale))
+        
+        elif terrain == 'hill':
+            grass_dark = decoration_colors.get('grass_dark', (100, 130, 70))
+            rock = decoration_colors.get('rock', (120, 110, 100))
+            
+            hill_points = [
+                (x, y - 8 * scale),
+                (x - 10 * scale, y + 5 * scale),
+                (x + 10 * scale, y + 5 * scale)
+            ]
+            pygame.draw.polygon(self.screen, grass_dark, hill_points)
+            pygame.draw.polygon(self.screen, rock, hill_points, 1)
+    
+    def _handle_edge_scroll(self):
+        if self.game_state != GAME_STATES['PLAYING']:
+            return
+        
+        mouse_x, mouse_y = self.mouse_pos
+        
+        if mouse_x < self.edge_threshold:
+            self.map_offset_x += self.scroll_speed
+        elif mouse_x > SCREEN_WIDTH - self.edge_threshold:
+            self.map_offset_x -= self.scroll_speed
+        
+        if mouse_y < self.edge_threshold:
+            self.map_offset_y += self.scroll_speed
+        elif mouse_y > SCREEN_HEIGHT - self.edge_threshold:
+            self.map_offset_y -= self.scroll_speed
+    
+    def _draw_unit_detail_panel(self, screen: pygame.Surface):
+        if not self.selected_unit:
+            return
+        
+        unit = self.selected_unit
+        panel_rect = self.unit_detail_panel_rect
+        
+        pygame.draw.rect(screen, UI_PANEL_COLOR, panel_rect)
+        pygame.draw.rect(screen, HIGHLIGHT_COLOR, panel_rect, 2)
+        
+        y_offset = panel_rect.y + 10
+        x_offset = panel_rect.x + 15
+        
+        unit_name = self.loc.get_unit_name(unit.unit_type)
+        title = self.ui.font_large.render(unit_name, True, unit.owner.color)
+        screen.blit(title, (x_offset, y_offset))
+        y_offset += 30
+        
+        owner_text = self.ui.font_medium.render(f"{self.loc.t('owner')}: {unit.owner.name}", True, TEXT_COLOR)
+        screen.blit(owner_text, (x_offset, y_offset))
+        y_offset += 25
+        
+        hp_text = self.ui.font_medium.render(
+            f"{self.loc.t('health')}: {unit.health}/{unit.max_health}", 
+            True, TEXT_COLOR
+        )
+        screen.blit(hp_text, (x_offset, y_offset))
+        
+        hp_bar_width = 100
+        hp_bar_height = 8
+        hp_x = x_offset
+        hp_y = y_offset + 20
+        hp_percent = unit.health / unit.max_health
+        
+        pygame.draw.rect(screen, (80, 80, 80), (hp_x, hp_y, hp_bar_width, hp_bar_height))
+        hp_color = (100, 255, 100) if hp_percent > 0.5 else (255, 200, 50) if hp_percent > 0.25 else (255, 80, 80)
+        pygame.draw.rect(screen, hp_color, (hp_x, hp_y, hp_bar_width * hp_percent, hp_bar_height))
+        pygame.draw.rect(screen, (200, 200, 200), (hp_x, hp_y, hp_bar_width, hp_bar_height), 1)
+        
+        y_offset += 35
+        
+        stats = [
+            (self.loc.t('attack'), unit.attack),
+            (self.loc.t('defense'), unit.defense),
+            (self.loc.t('movement'), unit.movement),
+        ]
+        
+        for stat_name, stat_value in stats:
+            stat_text = self.ui.font_medium.render(f"{stat_name}: {stat_value}", True, TEXT_COLOR)
+            screen.blit(stat_text, (x_offset, y_offset))
+            y_offset += 25
+        
+        y_offset += 5
+        status_text = self.ui.font_small.render(self.loc.t('status') + ":", True, TEXT_COLOR)
+        screen.blit(status_text, (x_offset, y_offset))
+        y_offset += 20
+        
+        if unit.moved_this_turn:
+            moved_text = self.ui.font_small.render(f"  - {self.loc.t('moved')}", True, (150, 150, 150))
+        else:
+            moved_text = self.ui.font_small.render(f"  - {self.loc.t('can_move')}", True, (100, 255, 100))
+        screen.blit(moved_text, (x_offset, y_offset))
+        y_offset += 18
+        
+        if unit.attacked_this_turn:
+            attack_text = self.ui.font_small.render(f"  - {self.loc.t('attacked')}", True, (150, 150, 150))
+        else:
+            attack_text = self.ui.font_small.render(f"  - {self.loc.t('can_attack')}", True, (100, 255, 100))
+        screen.blit(attack_text, (x_offset, y_offset))
+        y_offset += 18
+        
+        if unit.can_build:
+            build_text = self.ui.font_small.render(f"  - {self.loc.t('can_build')}", True, (100, 200, 255))
+            screen.blit(build_text, (x_offset, y_offset))
+        
+        close_button_rect = pygame.Rect(
+            panel_rect.right - 30, panel_rect.y + 5, 25, 25
+        )
+        pygame.draw.rect(screen, (200, 80, 80), close_button_rect)
+        pygame.draw.rect(screen, (255, 255, 255), close_button_rect, 1)
+        
+        close_text = self.ui.font_small.render("X", True, (255, 255, 255))
+        text_rect = close_text.get_rect(center=close_button_rect.center)
+        screen.blit(close_text, text_rect)
+        
+        self.unit_detail_close_button = close_button_rect
     
     def draw_building_icon(self, x: float, y: float, building: Building):
         color = building.owner.color
@@ -731,115 +943,162 @@ class Game:
             self._draw_default_building_icon(x, y, color)
     
     def _draw_town_icon(self, x: float, y: float, color: tuple):
-        base_y = y - 5
-        base_width = 20
-        base_height = 12
-        roof_height = 8
+        scale = self.zoom_level
+        detail_colors = BUILDING_DETAIL_COLORS.get('town', {})
+        
+        roof_color = detail_colors.get('roof', (200, 100, 80))
+        wall_color = detail_colors.get('wall', (180, 160, 140))
+        door_color = detail_colors.get('door', (100, 60, 40))
+        window_color = detail_colors.get('window', (255, 255, 200))
+        
+        base_y = y - 5 * scale
+        base_width = 20 * scale
+        base_height = 12 * scale
+        roof_height = 8 * scale
         
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2 + roof_height, base_width, base_height)
-        pygame.draw.rect(self.screen, color, base_rect)
+        pygame.draw.rect(self.screen, wall_color, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
         
         roof_points = [
-            (x, base_y - base_height//2 - roof_height + 2),
-            (x - base_width//2 - 2, base_y - base_height//2 + roof_height),
-            (x + base_width//2 + 2, base_y - base_height//2 + roof_height)
+            (x, base_y - base_height//2 - roof_height + 2 * scale),
+            (x - base_width//2 - 2 * scale, base_y - base_height//2 + roof_height),
+            (x + base_width//2 + 2 * scale, base_y - base_height//2 + roof_height)
         ]
-        pygame.draw.polygon(self.screen, (200, 100, 80), roof_points)
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
         pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
         
-        door_rect = pygame.Rect(x - 3, base_y - base_height//2 + roof_height + 5, 6, 7)
-        pygame.draw.rect(self.screen, (100, 60, 40), door_rect)
+        window_rect = pygame.Rect(x - 6 * scale, base_y - base_height//2 + roof_height + 2 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
+        
+        window_rect2 = pygame.Rect(x + 2 * scale, base_y - base_height//2 + roof_height + 2 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect2)
+        
+        door_rect = pygame.Rect(x - 3 * scale, base_y - base_height//2 + roof_height + 5 * scale, 6 * scale, 7 * scale)
+        pygame.draw.rect(self.screen, door_color, door_rect)
     
     def _draw_barracks_icon(self, x: float, y: float, color: tuple):
-        base_y = y - 5
-        base_width = 18
-        base_height = 14
+        scale = self.zoom_level
+        detail_colors = BUILDING_DETAIL_COLORS.get('barracks', {})
+        
+        wall_color = detail_colors.get('wall', (120, 100, 80))
+        roof_color = detail_colors.get('roof', (180, 120, 60))
+        flag_color = detail_colors.get('flag', (200, 50, 50))
+        pole_color = detail_colors.get('pole', (80, 60, 40))
+        window_color = detail_colors.get('window', (255, 255, 200))
+        
+        base_y = y - 5 * scale
+        base_width = 18 * scale
+        base_height = 14 * scale
         
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
-        pygame.draw.rect(self.screen, color, base_rect)
+        pygame.draw.rect(self.screen, wall_color, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
         
         flag_x = x
-        flag_top_y = base_y - base_height//2 - 6
-        pygame.draw.line(self.screen, (80, 60, 40), (flag_x, base_y - base_height//2), (flag_x, flag_top_y), 2)
+        flag_top_y = base_y - base_height//2 - 6 * scale
+        pygame.draw.line(self.screen, pole_color, (flag_x, base_y - base_height//2), (flag_x, flag_top_y), int(2 * scale))
         
         flag_points = [
             (flag_x, flag_top_y),
-            (flag_x + 8, flag_top_y + 4),
-            (flag_x, flag_top_y + 8)
+            (flag_x + 8 * scale, flag_top_y + 4 * scale),
+            (flag_x, flag_top_y + 8 * scale)
         ]
-        pygame.draw.polygon(self.screen, (200, 50, 50), flag_points)
+        pygame.draw.polygon(self.screen, flag_color, flag_points)
         pygame.draw.polygon(self.screen, (255, 255, 255), flag_points, 1)
         
-        window_rect = pygame.Rect(x - 5, base_y - 3, 4, 4)
-        pygame.draw.rect(self.screen, (255, 255, 200), window_rect)
-        window_rect2 = pygame.Rect(x + 1, base_y - 3, 4, 4)
-        pygame.draw.rect(self.screen, (255, 255, 200), window_rect2)
+        window_rect = pygame.Rect(x - 5 * scale, base_y - 3 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
+        window_rect2 = pygame.Rect(x + 1 * scale, base_y - 3 * scale, 4 * scale, 4 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect2)
     
     def _draw_farm_icon(self, x: float, y: float, color: tuple):
-        base_y = y - 5
-        field_width = 18
-        field_height = 8
+        scale = self.zoom_level
+        detail_colors = BUILDING_DETAIL_COLORS.get('farm', {})
+        
+        field_dark = detail_colors.get('field_dark', (60, 120, 40))
+        field_light = detail_colors.get('field_light', (100, 160, 80))
+        crop_color = detail_colors.get('crop', (255, 220, 50))
+        barn_color = detail_colors.get('barn', (180, 140, 100))
+        
+        base_y = y - 5 * scale
+        field_width = 18 * scale
+        field_height = 8 * scale
         
         field_rect = pygame.Rect(x - field_width//2, base_y, field_width, field_height)
-        pygame.draw.rect(self.screen, (80, 140, 60), field_rect)
+        pygame.draw.rect(self.screen, field_dark, field_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), field_rect, 1)
         
         for i in range(3):
-            plant_x = x - 5 + i * 5
-            plant_y = base_y - 2
-            pygame.draw.line(self.screen, (50, 100, 30), (plant_x, plant_y + 2), (plant_x, plant_y - 3), 1)
-            pygame.draw.circle(self.screen, (255, 220, 50), (int(plant_x), int(plant_y - 4)), 2)
+            plant_x = x - 5 * scale + i * 5 * scale
+            plant_y = base_y - 2 * scale
+            pygame.draw.line(self.screen, field_light, (plant_x, plant_y + 2 * scale), (plant_x, plant_y - 3 * scale), int(1 * scale))
+            pygame.draw.circle(self.screen, crop_color, (int(plant_x), int(plant_y - 4 * scale)), int(2 * scale))
         
-        pygame.draw.rect(self.screen, color, (x - 3, base_y - 8, 6, 6))
-        pygame.draw.rect(self.screen, (255, 255, 255), (x - 3, base_y - 8, 6, 6), 1)
+        pygame.draw.rect(self.screen, barn_color, (x - 3 * scale, base_y - 8 * scale, 6 * scale, 6 * scale))
+        pygame.draw.rect(self.screen, (255, 255, 255), (x - 3 * scale, base_y - 8 * scale, 6 * scale, 6 * scale), 1)
     
     def _draw_tower_icon(self, x: float, y: float, color: tuple):
-        base_y = y - 5
-        base_width = 12
-        base_height = 16
+        scale = self.zoom_level
+        detail_colors = BUILDING_DETAIL_COLORS.get('tower', {})
+        
+        stone_dark = detail_colors.get('stone_dark', (100, 100, 100))
+        stone_light = detail_colors.get('stone_light', (140, 140, 140))
+        crenellation_color = detail_colors.get('crenellation', (80, 120, 200))
+        window_color = detail_colors.get('window', (80, 80, 150))
+        
+        base_y = y - 5 * scale
+        base_width = 12 * scale
+        base_height = 16 * scale
         
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
-        pygame.draw.rect(self.screen, (120, 120, 120), base_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
+        pygame.draw.rect(self.screen, stone_dark, base_rect)
+        pygame.draw.rect(self.screen, stone_light, base_rect, 1)
         
-        top_width = 16
-        top_height = 4
+        top_width = 16 * scale
+        top_height = 4 * scale
         top_rect = pygame.Rect(x - top_width//2, base_y - base_height//2 - top_height, top_width, top_height)
-        pygame.draw.rect(self.screen, color, top_rect)
+        pygame.draw.rect(self.screen, crenellation_color, top_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), top_rect, 1)
         
         for i in range(3):
-            notch_x = x - top_width//2 + i * 8
-            notch_rect = pygame.Rect(notch_x, base_y - base_height//2 - top_height - 3, 4, 3)
-            pygame.draw.rect(self.screen, color, notch_rect)
+            notch_x = x - top_width//2 + i * 8 * scale
+            notch_rect = pygame.Rect(notch_x, base_y - base_height//2 - top_height - 3 * scale, 4 * scale, 3 * scale)
+            pygame.draw.rect(self.screen, crenellation_color, notch_rect)
         
-        window_rect = pygame.Rect(x - 2, base_y - 2, 4, 6)
-        pygame.draw.rect(self.screen, (80, 80, 150), window_rect)
+        window_rect = pygame.Rect(x - 2 * scale, base_y - 2 * scale, 4 * scale, 6 * scale)
+        pygame.draw.rect(self.screen, window_color, window_rect)
     
     def _draw_lumbermill_icon(self, x: float, y: float, color: tuple):
-        base_y = y - 5
-        base_width = 16
-        base_height = 10
+        scale = self.zoom_level
+        detail_colors = BUILDING_DETAIL_COLORS.get('lumbermill', {})
+        
+        wood_dark = detail_colors.get('wood_dark', (101, 67, 33))
+        wood_light = detail_colors.get('wood_light', (139, 90, 43))
+        roof_color = detail_colors.get('roof', (80, 50, 30))
+        log_color = detail_colors.get('log', (101, 67, 33))
+        
+        base_y = y - 5 * scale
+        base_width = 16 * scale
+        base_height = 10 * scale
         
         base_rect = pygame.Rect(x - base_width//2, base_y - base_height//2, base_width, base_height)
-        pygame.draw.rect(self.screen, (139, 90, 43), base_rect)
+        pygame.draw.rect(self.screen, wood_light, base_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), base_rect, 1)
         
         roof_points = [
-            (x, base_y - base_height//2 - 6),
-            (x - base_width//2 - 2, base_y - base_height//2),
-            (x + base_width//2 + 2, base_y - base_height//2)
+            (x, base_y - base_height//2 - 6 * scale),
+            (x - base_width//2 - 2 * scale, base_y - base_height//2),
+            (x + base_width//2 + 2 * scale, base_y - base_height//2)
         ]
-        pygame.draw.polygon(self.screen, (80, 50, 30), roof_points)
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
         pygame.draw.polygon(self.screen, (255, 255, 255), roof_points, 1)
         
-        log_y = base_y + base_height//2 + 2
-        pygame.draw.ellipse(self.screen, (101, 67, 33), (x - 8, log_y, 16, 4))
-        pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8, log_y, 16, 4), 1)
+        log_y = base_y + base_height//2 + 2 * scale
+        pygame.draw.ellipse(self.screen, log_color, (x - 8 * scale, log_y, 16 * scale, 4 * scale))
+        pygame.draw.ellipse(self.screen, (255, 255, 255), (x - 8 * scale, log_y, 16 * scale, 4 * scale), 1)
         
-        pygame.draw.rect(self.screen, color, (x - 2, base_y - 3, 4, 4))
+        pygame.draw.rect(self.screen, wood_dark, (x - 2 * scale, base_y - 3 * scale, 4 * scale, 4 * scale))
     
     def _draw_default_building_icon(self, x: float, y: float, color: tuple):
         icon_size = 16
@@ -865,73 +1124,150 @@ class Game:
             self._draw_default_unit_icon(x, y, color, unit)
     
     def _draw_warrior_icon(self, x: float, y: float, color: tuple, unit: Unit):
-        base_y = y + 12
+        scale = self.zoom_level
+        detail_colors = UNIT_DETAIL_COLORS.get('warrior', {})
         
-        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
-        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        armor_color = detail_colors.get('armor', (80, 120, 200))
+        helmet_color = detail_colors.get('helmet', (100, 100, 120))
+        sword_color = detail_colors.get('sword', (200, 200, 200))
+        hilt_color = detail_colors.get('hilt', (180, 140, 80))
         
-        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
-        pygame.draw.rect(self.screen, color, body_rect)
+        base_y = y + 12 * scale
+        
+        pygame.draw.circle(self.screen, helmet_color, (int(x), int(base_y - 4 * scale)), int(5 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4 * scale)), int(5 * scale), 1)
+        
+        pygame.draw.circle(self.screen, (200, 200, 220), (int(x), int(base_y - 6 * scale)), int(2 * scale))
+        
+        body_rect = pygame.Rect(x - 4 * scale, base_y, 8 * scale, 8 * scale)
+        pygame.draw.rect(self.screen, armor_color, body_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
         
-        sword_x = x + 6
-        pygame.draw.line(self.screen, (200, 200, 200), (sword_x, base_y - 2), (sword_x, base_y + 6), 2)
-        pygame.draw.line(self.screen, (180, 140, 80), (sword_x - 2, base_y - 2), (sword_x + 2, base_y - 2), 3)
+        shield_rect = pygame.Rect(x - 8 * scale, base_y + 2 * scale, 4 * scale, 6 * scale)
+        pygame.draw.rect(self.screen, (150, 120, 80), shield_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), shield_rect, 1)
+        
+        sword_x = x + 6 * scale
+        pygame.draw.line(self.screen, sword_color, (sword_x, base_y - 2 * scale), (sword_x, base_y + 6 * scale), int(2 * scale))
+        pygame.draw.line(self.screen, hilt_color, (sword_x - 2 * scale, base_y - 2 * scale), (sword_x + 2 * scale, base_y - 2 * scale), int(3 * scale))
         
         self._draw_health_bar(x, y, unit)
     
     def _draw_archer_icon(self, x: float, y: float, color: tuple, unit: Unit):
-        base_y = y + 12
+        scale = self.zoom_level
+        detail_colors = UNIT_DETAIL_COLORS.get('archer', {})
         
-        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
-        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        body_color = detail_colors.get('body', (100, 150, 100))
+        hood_color = detail_colors.get('hood', (80, 120, 80))
+        bow_color = detail_colors.get('bow', (139, 90, 43))
+        arrow_color = detail_colors.get('arrow', (200, 200, 200))
         
-        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
-        pygame.draw.rect(self.screen, color, body_rect)
+        base_y = y + 12 * scale
+        
+        pygame.draw.circle(self.screen, hood_color, (int(x), int(base_y - 4 * scale)), int(6 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4 * scale)), int(6 * scale), 1)
+        
+        pygame.draw.polygon(self.screen, hood_color, [
+            (x, base_y - 10 * scale),
+            (x - 5 * scale, base_y - 4 * scale),
+            (x + 5 * scale, base_y - 4 * scale)
+        ])
+        
+        body_rect = pygame.Rect(x - 4 * scale, base_y, 8 * scale, 8 * scale)
+        pygame.draw.rect(self.screen, body_color, body_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
         
-        bow_x = x + 7
-        pygame.draw.arc(self.screen, (139, 90, 43), (bow_x - 4, base_y - 6, 8, 14), -math.pi/2, math.pi/2, 2)
-        pygame.draw.line(self.screen, (200, 200, 200), (bow_x, base_y - 6), (bow_x, base_y + 8), 1)
+        quiver_rect = pygame.Rect(x - 7 * scale, base_y - 2 * scale, 3 * scale, 10 * scale)
+        pygame.draw.rect(self.screen, (101, 67, 33), quiver_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), quiver_rect, 1)
+        
+        bow_x = x + 7 * scale
+        pygame.draw.arc(self.screen, bow_color, 
+                       (bow_x - 4 * scale, base_y - 6 * scale, 8 * scale, 14 * scale),
+                       -math.pi/2, math.pi/2, int(2 * scale))
+        pygame.draw.line(self.screen, arrow_color, 
+                        (bow_x, base_y - 6 * scale), (bow_x, base_y + 8 * scale), int(1 * scale))
         
         self._draw_health_bar(x, y, unit)
     
     def _draw_builder_icon(self, x: float, y: float, color: tuple, unit: Unit):
-        base_y = y + 12
+        scale = self.zoom_level
+        detail_colors = UNIT_DETAIL_COLORS.get('builder', {})
         
-        pygame.draw.circle(self.screen, color, (int(x), int(base_y - 4)), 5)
-        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4)), 5, 1)
+        body_color = detail_colors.get('body', (150, 120, 80))
+        hat_color = detail_colors.get('hat', (180, 140, 100))
+        hammer_color = detail_colors.get('hammer', (150, 150, 150))
+        handle_color = detail_colors.get('handle', (101, 67, 33))
         
-        body_rect = pygame.Rect(x - 4, base_y, 8, 8)
-        pygame.draw.rect(self.screen, color, body_rect)
+        base_y = y + 12 * scale
+        
+        pygame.draw.circle(self.screen, hat_color, (int(x), int(base_y - 4 * scale)), int(5 * scale))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(base_y - 4 * scale)), int(5 * scale), 1)
+        
+        pygame.draw.polygon(self.screen, hat_color, [
+            (x, base_y - 10 * scale),
+            (x - 6 * scale, base_y - 2 * scale),
+            (x + 6 * scale, base_y - 2 * scale)
+        ])
+        
+        body_rect = pygame.Rect(x - 4 * scale, base_y, 8 * scale, 8 * scale)
+        pygame.draw.rect(self.screen, body_color, body_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), body_rect, 1)
         
-        hammer_x = x + 6
-        pygame.draw.line(self.screen, (139, 90, 43), (hammer_x, base_y - 4), (hammer_x, base_y + 6), 2)
-        pygame.draw.rect(self.screen, (150, 150, 150), (hammer_x - 3, base_y - 6, 6, 4))
+        toolbelt_rect = pygame.Rect(x - 5 * scale, base_y + 5 * scale, 10 * scale, 2 * scale)
+        pygame.draw.rect(self.screen, (101, 67, 33), toolbelt_rect)
+        
+        hammer_x = x + 6 * scale
+        pygame.draw.line(self.screen, handle_color, (hammer_x, base_y - 4 * scale), (hammer_x, base_y + 6 * scale), int(2 * scale))
+        pygame.draw.rect(self.screen, hammer_color, (hammer_x - 3 * scale, base_y - 6 * scale, 6 * scale, 4 * scale))
         
         if unit.can_build:
-            pygame.draw.circle(self.screen, (100, 255, 100), (int(x + 8), int(base_y - 6)), 3)
-            pygame.draw.circle(self.screen, (255, 255, 255), (int(x + 8), int(base_y - 6)), 3, 1)
+            pygame.draw.circle(self.screen, (100, 255, 100), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale))
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(x + 8 * scale), int(base_y - 6 * scale)), int(3 * scale), 1)
         
         self._draw_health_bar(x, y, unit)
     
     def _draw_default_unit_icon(self, x: float, y: float, color: tuple, unit: Unit):
-        icon_size = 14
-        pygame.draw.circle(self.screen, color, (int(x), int(y + 15)), icon_size//2)
-        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y + 15)), icon_size//2, 1)
+        scale = self.zoom_level
+        icon_size = 14 * scale
+        pygame.draw.circle(self.screen, color, (int(x), int(y + 15 * scale)), int(icon_size//2))
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y + 15 * scale)), int(icon_size//2), 1)
         self._draw_health_bar(x, y, unit)
     
     def _draw_health_bar(self, x: float, y: float, unit: Unit):
+        scale = self.zoom_level
         hp_percent = unit.health / unit.max_health
-        hp_bar_width = 18
-        hp_bar_height = 3
+        hp_bar_width = 18 * scale
+        hp_bar_height = 3 * scale
         hp_x = x - hp_bar_width//2
-        hp_y = y + 22
+        hp_y = y + 22 * scale
         
         pygame.draw.rect(self.screen, (80, 80, 80), (hp_x, hp_y, hp_bar_width, hp_bar_height))
         hp_color = (100, 255, 100) if hp_percent > 0.5 else (255, 200, 50) if hp_percent > 0.25 else (255, 80, 80)
         pygame.draw.rect(self.screen, hp_color, (hp_x, hp_y, hp_bar_width * hp_percent, hp_bar_height))
+    
+    def _handle_zoom(self, scroll_amount: int, mouse_pos: Tuple[int, int]):
+        old_zoom = self.zoom_level
+        
+        if scroll_amount > 0:
+            self.zoom_level = min(self.zoom_level + self.zoom_step, self.max_zoom)
+        else:
+            self.zoom_level = max(self.zoom_level - self.zoom_step, self.min_zoom)
+        
+        if old_zoom != self.zoom_level:
+            mouse_x, mouse_y = mouse_pos
+            old_offset_x = mouse_x - self.map_offset_x
+            old_offset_y = mouse_y - self.map_offset_y
+            
+            new_offset_x = old_offset_x * (self.zoom_level / old_zoom)
+            new_offset_y = old_offset_y * (self.zoom_level / old_zoom)
+            
+            self.map_offset_x = mouse_x - new_offset_x
+            self.map_offset_y = mouse_y - new_offset_y
+    
+    def _toggle_unit_detail_panel(self):
+        if self.selected_unit:
+            self.unit_detail_panel_visible = not self.unit_detail_panel_visible
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -951,6 +1287,11 @@ class Game:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_buttons_pressed[event.button] = True
                 
+                if event.button == 3:
+                    if self.game_state == GAME_STATES['PLAYING']:
+                        if self.selected_unit:
+                            self._toggle_unit_detail_panel()
+                
                 if event.button == 1:
                     self.mouse_pos = event.pos
                     
@@ -964,6 +1305,13 @@ class Game:
                         settings_visible = self.settings_popup and self.settings_popup.visible
                         build_visible = self.build_popup and self.build_popup.visible
                         train_visible = self.train_popup and self.train_popup.visible
+                        
+                        if self.unit_detail_panel_visible:
+                            if hasattr(self, 'unit_detail_close_button') and self.unit_detail_close_button.collidepoint(event.pos):
+                                self.unit_detail_panel_visible = False
+                                continue
+                            if self.unit_detail_panel_rect.collidepoint(event.pos):
+                                continue
                         
                         if self.unit_selection_pending:
                             unit_selection_action = self._handle_unit_selection_click(event.pos)
@@ -1065,6 +1413,8 @@ class Game:
             elif event.type == pygame.MOUSEWHEEL:
                 if self.game_state == GAME_STATES['HELP']:
                     self.help_menu.handle_scroll(event.y)
+                elif self.game_state == GAME_STATES['PLAYING']:
+                    self._handle_zoom(event.y, self.mouse_pos)
         
         if self.game_state == GAME_STATES['PLAYING']:
             keys = pygame.key.get_pressed()

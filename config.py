@@ -22,6 +22,90 @@ TERRAIN_COLORS = {
     'hill': (120, 150, 90),
 }
 
+TERRAIN_DECORATION_COLORS = {
+    'plain': {
+        'grass_dark': (130, 160, 80),
+        'grass_light': (170, 200, 120),
+        'flower': (255, 220, 100),
+    },
+    'forest': {
+        'tree_dark': (30, 80, 30),
+        'tree_light': (70, 140, 70),
+        'trunk': (101, 67, 33),
+        'foliage': (50, 120, 50),
+    },
+    'mountain': {
+        'rock_dark': (100, 90, 80),
+        'rock_light': (180, 170, 160),
+        'snow': (250, 250, 255),
+    },
+    'water': {
+        'wave_dark': (40, 110, 170),
+        'wave_light': (100, 180, 240),
+        'foam': (220, 240, 255),
+    },
+    'hill': {
+        'grass_dark': (100, 130, 70),
+        'grass_light': (140, 170, 110),
+        'rock': (120, 110, 100),
+    },
+}
+
+BUILDING_DETAIL_COLORS = {
+    'town': {
+        'roof': (200, 100, 80),
+        'wall': (180, 160, 140),
+        'door': (100, 60, 40),
+        'window': (255, 255, 200),
+    },
+    'barracks': {
+        'wall': (120, 100, 80),
+        'roof': (180, 120, 60),
+        'flag': (200, 50, 50),
+        'pole': (80, 60, 40),
+        'window': (255, 255, 200),
+    },
+    'farm': {
+        'field_dark': (60, 120, 40),
+        'field_light': (100, 160, 80),
+        'crop': (255, 220, 50),
+        'barn': (180, 140, 100),
+    },
+    'tower': {
+        'stone_dark': (100, 100, 100),
+        'stone_light': (140, 140, 140),
+        'crenellation': (80, 120, 200),
+        'window': (80, 80, 150),
+    },
+    'lumbermill': {
+        'wood_dark': (101, 67, 33),
+        'wood_light': (139, 90, 43),
+        'roof': (80, 50, 30),
+        'log': (101, 67, 33),
+    },
+}
+
+UNIT_DETAIL_COLORS = {
+    'warrior': {
+        'armor': (80, 120, 200),
+        'helmet': (100, 100, 120),
+        'sword': (200, 200, 200),
+        'hilt': (180, 140, 80),
+    },
+    'archer': {
+        'body': (100, 150, 100),
+        'hood': (80, 120, 80),
+        'bow': (139, 90, 43),
+        'arrow': (200, 200, 200),
+    },
+    'builder': {
+        'body': (150, 120, 80),
+        'hat': (180, 140, 100),
+        'hammer': (150, 150, 150),
+        'handle': (101, 67, 33),
+    },
+}
+
 TERRAIN_NAMES = {
     'plain': 'Plain',
     'forest': 'Forest',
@@ -157,4 +241,16 @@ GAME_STATES = {
     'PLAYING': 'playing',
     'PAUSED': 'paused',
     'GAME_OVER': 'game_over',
+}
+
+ZOOM_CONFIG = {
+    'min_zoom': 0.5,
+    'max_zoom': 2.0,
+    'zoom_step': 0.1,
+    'default_zoom': 1.0,
+}
+
+EDGE_SCROLL_CONFIG = {
+    'scroll_speed': 5,
+    'edge_threshold': 50,
 }

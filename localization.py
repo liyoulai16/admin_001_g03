@@ -50,7 +50,12 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'can_move': 'Can move',
         'attacked': 'Attacked',
         'can_attack': 'Can attack',
+        'can_build': 'Can build',
         'status': 'Status',
+        'health': 'Health',
+        'attack': 'Attack',
+        'defense': 'Defense',
+        'movement': 'Movement',
         
         'combat_log': 'Combat Log',
         
@@ -212,7 +217,12 @@ TRANSLATIONS: Dict[str, Dict[str, Any]] = {
         'can_move': '可移动',
         'attacked': '已攻击',
         'can_attack': '可攻击',
+        'can_build': '可建造',
         'status': '单位状态',
+        'health': '生命值',
+        'attack': '攻击力',
+        'defense': '防御力',
+        'movement': '移动力',
         
         'combat_log': '战斗日志',
         
